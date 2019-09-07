@@ -1,0 +1,32 @@
+name:                replace-attoparsec
+version:             0.1.0.0
+cabal-version:       >=1.10
+synopsis:            Stream editing with Attoparsec
+homepage:            https://github.com/jamesdbrock/replace-attoparsec
+bug-reports:         https://github.com/jamesdbrock/replace-attoparsec/issues
+license:             BSD2
+license-file:        LICENSE
+author:              James Brock
+maintainer:          jamesbrock@gmail.com
+build-type:          Simple
+category:            Parsing
+description:
+
+  Stream editing and find-and-replace with Attoparsec monadic parser
+  combinators.
+
+extra-doc-files:     README.md
+                   , CHANGELOG.md
+
+source-repository head
+  type:               git
+  location:           https://github.com/jamesdbrock/replace-attoparsec.git
+
+library
+  exposed-modules:     Replace.Attoparsec.Text
+                     , Replace.Attoparsec.ByteString
+  build-depends:       base >=4.0 && <5.0
+                     , attoparsec
+  ghc-options:         -O2 -Wall
+  hs-source-dirs:      src
+  default-language:    Haskell2010
