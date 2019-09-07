@@ -23,10 +23,26 @@ source-repository head
   location:           https://github.com/jamesdbrock/replace-attoparsec.git
 
 library
-  exposed-modules:     Replace.Attoparsec.Text
-                     , Replace.Attoparsec.ByteString
+  hs-source-dirs:      src
   build-depends:       base >=4.0 && <5.0
                      , attoparsec
-  ghc-options:         -O2 -Wall
-  hs-source-dirs:      src
+                     , bytestring
+                     , text
   default-language:    Haskell2010
+  -- exposed-modules:     Replace.Attoparsec
+  exposed-modules:     Replace.Attoparsec.Text
+                     , Replace.Attoparsec.ByteString
+  ghc-options:         -O2 -Wall
+
+test-suite test-bytestring
+  type:                detailed-0.9
+  test-module:         TestByteString
+  hs-source-dirs:      tests
+  default-language:    Haskell2010
+  build-depends:       base >= 4.0 && < 5.0
+                     , replace-attoparsec
+                     , attoparsec
+                     , Cabal
+                     , bytestring
+                     , parsers
+  ghc-options:         -Wall
