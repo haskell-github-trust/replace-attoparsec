@@ -83,7 +83,7 @@ import qualified Data.Attoparsec.Internal.Types as AT
 --
 {-# INLINABLE sepCap #-}
 sepCap
-    :: Parser a
+    :: Parser a -- ^ The pattern matching parser @sep@
     -> Parser [Either BS.ByteString a]
 sepCap sep = (fmap.fmap) (first BS.pack)
              $ fmap sequenceLeft
