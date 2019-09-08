@@ -1,5 +1,5 @@
 -- |
--- Module    : Replace.Attoparsec
+-- Module    : Replace.Attoparsec.ByteString
 --
 -- __Replace.Attoparsec__ is for finding text patterns, and also editing and
 -- replacing the found patterns.
@@ -26,8 +26,6 @@
 -- <https://www.gnu.org/software/gawk/manual/gawk.html awk>.
 --
 -- See the __[replace-attoparsec](https://hackage.haskell.org/package/replace-attoparsec)__ package README for usage examples.
---
--- See __[replace-megaparsec](https://hackage.haskell.org/package/replace-megaparsec)__ for the Megaparsec version.
 
 {-# LANGUAGE LambdaCase #-}
 
@@ -96,6 +94,10 @@ sepCap
 sepCap sep = (fmap.fmap) (first B.pack)
              $ fmap sequenceLeft
              $ many $ fmap Right (consumeSome sep) <|> fmap Left anyWord8
+             -- TODO We might consider accumulating a Builder for Left instead
+             -- of returning a list of Word8.
+             -- Would expect faster for sparse patterns, slower for dense
+             -- patterns.
   where
     sequenceLeft :: [Either Word8 r] -> [Either [Word8] r]
     sequenceLeft = foldr consLeft []
@@ -231,7 +233,7 @@ streamEditT sep editor input = do
         (Right r) -> fmap mconcat $ traverse (either return editor) r
 
 
--- | Get the 'Data.Attoparsec.Parser' ’s current offset position in the stream.
+-- | Get the 'Data.Attoparsec.ByteString.Parser' ’s current offset position in the stream.
 --
 -- [“… you know you're in an uncomfortable state of sin :-)” — bos](https://github.com/bos/attoparsec/issues/101)
 getOffset :: Parser Int

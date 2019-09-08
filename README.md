@@ -29,6 +29,8 @@ or Unix
 or
 [`awk`](https://www.gnu.org/software/gawk/manual/gawk.html).
 
+See __[replace-megaparsec](https://hackage.haskell.org/package/replace-megaparsec)__ for the __megaparsec__ version.
+
 ## Why would we want to do pattern matching and substitution with parsers instead of regular expressions?
 
 * Haskell parsers have a nicer syntax than
