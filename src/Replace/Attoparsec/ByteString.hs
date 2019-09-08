@@ -29,6 +29,8 @@
 --
 -- See __[replace-megaparsec](https://hackage.haskell.org/package/replace-megaparsec)__ for the Megaparsec version.
 
+{-# LANGUAGE LambdaCase #-}
+
 module Replace.Attoparsec.ByteString
   (
     -- * Parser combinator
@@ -36,16 +38,22 @@ module Replace.Attoparsec.ByteString
   , findAll
   , findAllCap
 
+    -- * Running parser
+  , streamEdit
+  , streamEditT
+
     -- * Parser
   , getOffset
   )
 where
 
+-- import Control.Exception (SomeException, throw)
+import Data.Functor.Identity
 import Data.Bifunctor
 import Control.Applicative
 import Control.Monad
 import Data.Attoparsec.ByteString
-import qualified Data.ByteString as BS
+import qualified Data.ByteString as B
 import GHC.Word
 import qualified Data.Attoparsec.Internal.Types as AT
 
@@ -68,8 +76,8 @@ import qualified Data.Attoparsec.Internal.Types as AT
 -- then it can match the same zero-width pattern again at the same position
 -- on the next iteration, which would result in an infinite number of
 -- overlapping pattern matches. So, for example, the
--- pattern @many digitChar@, which can match zero occurences of a digit,
--- will be treated by @sepCap@ as @some digitChar@, and required to match
+-- pattern @many digit@, which can match zero occurences of a digit,
+-- will be treated by @sepCap@ as @many1 digit@, and required to match
 -- at least one digit.
 --
 -- This @sepCap@ parser combinator is the basis for all of the other
@@ -84,8 +92,8 @@ import qualified Data.Attoparsec.Internal.Types as AT
 {-# INLINABLE sepCap #-}
 sepCap
     :: Parser a -- ^ The pattern matching parser @sep@
-    -> Parser [Either BS.ByteString a]
-sepCap sep = (fmap.fmap) (first BS.pack)
+    -> Parser [Either B.ByteString a]
+sepCap sep = (fmap.fmap) (first B.pack)
              $ fmap sequenceLeft
              $ many $ fmap Right (consumeSome sep) <|> fmap Left anyWord8
   where
@@ -110,21 +118,20 @@ sepCap sep = (fmap.fmap) (first BS.pack)
 --
 -- Parser combinator for finding all occurences of a pattern in a stream.
 --
--- Will call 'sepCap' with the 'Data.Attoparsec.match' combinator so that
+-- Will call 'sepCap' with the 'Data.Attoparsec.ByteString.match' combinator so that
 -- the text which matched the pattern parser @sep@ will be returned in
 -- the 'Right' sections, along with the result of the parse of @sep@.
 --
 -- Definition:
 --
 -- @
--- findAllCap sep = 'sepCap' ('Data.Attoparsec.match' sep)
+-- findAllCap sep = 'sepCap' ('Data.Attoparsec.ByteString.match' sep)
 -- @
 {-# INLINABLE findAllCap #-}
 findAllCap
     :: Parser a -- ^ The pattern matching parser @sep@
-    -> Parser [Either BS.ByteString (BS.ByteString, a)]
+    -> Parser [Either B.ByteString (B.ByteString, a)]
 findAllCap sep = sepCap (match sep)
-
 
 
 -- |
@@ -132,20 +139,97 @@ findAllCap sep = sepCap (match sep)
 --
 -- Parser combinator for finding all occurences of a pattern in a stream.
 --
--- Will call 'sepCap' with the 'Data.Attoparsec.match' combinator and
+-- Will call 'sepCap' with the 'Data.Attoparsec.ByteString.match' combinator and
 -- return the text which matched the pattern parser @sep@ in
 -- the 'Right' sections.
 --
 -- Definition:
 --
 -- @
--- findAll sep = (fmap.fmap) ('Data.Bifunctor.second' fst) $ 'sepCap' ('Data.Attoparsec.match' sep)
+-- findAll sep = (fmap.fmap) ('Data.Bifunctor.second' fst) $ 'sepCap' ('Data.Attoparsec.ByteString.match' sep)
 -- @
 {-# INLINABLE findAll #-}
 findAll
     :: Parser a -- ^ The pattern matching parser @sep@
-    -> Parser [Either BS.ByteString BS.ByteString]
+    -> Parser [Either B.ByteString B.ByteString]
 findAll sep = (fmap.fmap) (second fst) $ sepCap (match sep)
+
+
+-- |
+-- == Stream editor
+--
+-- Also known as “find-and-replace”, or “match-and-substitute”. Finds all
+-- of the sections of the stream which match the pattern @sep@, and replaces
+-- them with the result of the @editor@ function.
+--
+-- This function is not a “parser combinator,” it is
+-- a “way to run a parser”, like 'Data.Attoparsec.ByteString.parse'
+-- or 'Data.Attoparsec.ByteString.parseOnly'.
+--
+-- === Access the matched section of text in the @editor@
+--
+-- If you want access to the matched string in the @editor@ function,
+-- then combine the pattern parser @sep@
+-- with 'Data.AttoParsec.ByteString.match'. This will effectively change
+-- the type of the @editor@ function to @(s,a) -> s@.
+--
+-- This allows us to write an @editor@ function which can choose to not
+-- edit the match and just leave it as it is. If the @editor@ function
+-- always returns the first item in the tuple, then @streamEdit@ changes
+-- nothing.
+--
+-- So, for all @sep@:
+--
+-- @
+-- streamEdit ('Data.Attoparsec.ByteString.match' sep) 'Data.Tuple.fst' ≡ 'Data.Function.id'
+-- @
+{-# INLINABLE streamEdit #-}
+streamEdit
+    -- :: forall s a. (Stream s, Monoid s, Tokens s ~ s, Show s, Show (Token s), Typeable s)
+    :: Parser a
+        -- ^ The parser @sep@ for the pattern of interest.
+    -> (a -> B.ByteString)
+        -- ^ The @editor@ function. Takes a parsed result of @sep@
+        -- and returns a new stream section for the replacement.
+    -> B.ByteString
+        -- ^ The input stream of text to be edited.
+    -> B.ByteString
+streamEdit sep editor = runIdentity . streamEditT sep (Identity . editor)
+
+
+-- |
+-- == Stream editor transformer
+--
+-- Monad transformer version of 'streamEdit'.
+--
+-- The @editor@ function will run in the underlying monad context.
+--
+-- If you want to do 'IO' operations in the @editor@ function then
+-- run this in 'IO'.
+--
+-- If you want the @editor@ function to remember some state,
+-- then run this in a stateful monad.
+{-# INLINABLE streamEditT #-}
+streamEditT
+    :: (Monad m)
+    => Parser a
+        -- ^ The parser @sep@ for the pattern of interest.
+    -> (a -> m B.ByteString)
+        -- ^ The @editor@ function. Takes a parsed result of @sep@
+        -- and returns a new stream section for the replacement.
+    -> B.ByteString
+        -- ^ The input stream of text to be edited.
+    -> m B.ByteString
+streamEditT sep editor input = do
+    case parseOnly (sepCap sep) input of
+        (Left err) -> error err
+        -- this function should never error, because it only errors
+        -- when the 'sepCap' parser fails, and the 'sepCap' parser
+        -- can never fail. If this function ever throws an error, please
+        -- report that as a bug.
+        -- (We don't use MonadFail because Identity is not a MonadFail.)
+        (Right r) -> fmap mconcat $ traverse (either return editor) r
+
 
 -- | Get the 'Data.Attoparsec.Parser' ’s current offset position in the stream.
 --
