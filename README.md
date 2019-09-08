@@ -80,8 +80,7 @@ The examples depend on these imports.
 ```haskell
 import Replace.Attoparsec.Text
 import Data.Attoparsec.Text
-import Data.Attoparsec.Text.Char
-import Data.Attoparsec.Text.Char.Lexer
+import Data.Either
 ```
 
 ### Parsing with `sepCap` family of parser combinators
@@ -96,8 +95,8 @@ Separate the input string into sections which can be parsed as a hexadecimal
 number with a prefix `"0x"`, and sections which can't.
 
 ```haskell
-let hexparser = string "0x" >> hexadecimal :: Parsec Void String Integer
-parseTest (sepCap hexparser) "0xA 000 0xFFFF"
+let hexparser = string "0x" >> hexadecimal :: Parser Integer
+fromRight [] $ parseOnly (sepCap hexparser) "0xA 000 0xFFFF"
 ```
 ```haskell
 [Right 10,Left " 000 ",Right 65535]
