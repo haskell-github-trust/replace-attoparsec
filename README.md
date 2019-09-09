@@ -75,12 +75,15 @@ Try the examples in `ghci` by
 running `cabal v2-repl` in the `replace-attoparsec/`
 root directory.
 
-The examples depend on these imports.
+The examples depend on these imports and `LANGUAGE OverloadedStrings`.
 
 ```haskell
+:set -XOverloadedStrings
 import Replace.Attoparsec.Text
-import Data.Attoparsec.Text
+import Data.Attoparsec.Text as AT
+import qualified Data.Text as T
 import Data.Either
+import Data.Char
 ```
 
 ### Parsing with `sepCap` family of parser combinators
@@ -108,8 +111,8 @@ Just get the strings sections which match the hexadecimal parser, throw away
 the parsed number.
 
 ```haskell
-let hexparser = string "0x" >> hexadecimal :: Parsec Void String Integer
-parseTest (findAll hexparser) "0xA 000 0xFFFF"
+let hexparser = string "0x" >> hexadecimal :: Parser Integer
+fromRight [] $ parseOnly (findAll hexparser) "0xA 000 0xFFFF"
 ```
 ```haskell
 [Right "0xA",Left " 000 ",Right "0xFFFF"]
@@ -122,7 +125,7 @@ parses as a hexadecimal number.
 
 ```haskell
 let hexparser = chunk "0x" >> hexadecimal :: Parsec Void String Integer
-parseTest (findAllCap hexparser) "0xA 000 0xFFFF"
+fromRight [] $ parseOnly (findAllCap hexparser) "0xA 000 0xFFFF"
 ```
 ```haskell
 [Right ("0xA",10),Left " 000 ",Right ("0xFFFF",65535)]
@@ -131,13 +134,13 @@ parseTest (findAllCap hexparser) "0xA 000 0xFFFF"
 #### Pattern match, capture only the locations of the matched patterns
 
 Find all of the sections of the stream which match
-the `Data.Attoparsec.Text.Char     space1` parser (a string of whitespace).
+a string of whitespace.
 Print a list of the offsets of the beginning of every pattern match.
 
 ```haskell
 import Data.Either
-let spaceoffset = getOffset <* space1 :: Parsec Void String Int
-parseTest (return . rights =<< sepCap spaceoffset) " a  b  "
+let spaceoffset = getOffset <* some space :: Parser Int
+fromRight [] $ parseOnly (return . rights =<< sepCap spaceoffset) " a  b  "
 ```
 ```haskell
 [0,2,5]
@@ -154,7 +157,7 @@ for the matched patterns.
 Replace all carriage-return-newline instances with newline.
 
 ```haskell
-streamEdit (chunk "\r\n") (const "\n") "1\r\n2\r\n"
+streamEdit (string "\r\n") (const "\n") "1\r\n2\r\n"
 ```
 ```haskell
 "1\n2\n"
@@ -165,7 +168,7 @@ streamEdit (chunk "\r\n") (const "\n") "1\r\n2\r\n"
 Replace alphabetic characters with the next character in the alphabet.
 
 ```haskell
-streamEdit (some letterChar) (fmap succ) "HAL 9000"
+streamEdit (AT.takeWhile isLetter) (T.map succ) "HAL 9000"
 ```
 ```haskell
 "IBM 9000"
@@ -180,41 +183,26 @@ and if *`r≤16`*, then replace *`s`* with a decimal number. Uses the
 combinator.
 
 ```haskell
-let hexparser = chunk "0x" >> hexadecimal :: Parsec Void String Integer
-streamEdit (match hexparser) (\(s,r) -> if r <= 16 then show r else s) "0xA 000 0xFFFF"
+let hexparser = string "0x" >> hexadecimal :: Parser Integer
+streamEdit (match hexparser) (\(s,r) -> if r <= 16 then T.pack (show r) else s) "0xA 000 0xFFFF"
 ```
 ```haskell
 "10 000 0xFFFF"
 ```
 
-#### Context-sensitive pattern match and edit the matches
-
-Capitalize the third letter in a string. The `capthird` parser searches for
-individual letters, and it needs to remember how many times it has run so
-that it can match successfully only on the third time that it finds a letter.
-To enable the parser to remember how many times it has run, we'll
-compose the parser with a `State` monad from
-the `mtl` package. (Run in `ghci` with `cabal v2-repl -b mtl`).
+#### Pattern match and edit the matches with IO
 
 ```haskell
-import qualified Control.Monad.State.Strict as MTL
-import Control.Monad.State.Strict (get, put, evalState)
-import Data.Char (toUpper)
-
-let capthird :: ParsecT Void String (MTL.State Int) String
-    capthird = do
-        x <- letterChar
-        i <- get
-        put (i+1)
-        if i==3 then return [x] else empty
-
-flip evalState 1 $ streamEditT capthird (return . fmap toUpper) "a a a a a"
+import System.Environment
+streamEditT (char '{' *> manyTill anyChar (char '}')) (fmap T.pack . getEnv) "{HOME}"
 ```
 ```haskell
-"a a A a a"
+"/home/jbrock"
 ```
 
 ## Alternatives
+
+<http://hackage.haskell.org/package/regex-applicative>
 
 <http://hackage.haskell.org/package/regex>
 
@@ -228,13 +216,9 @@ flip evalState 1 $ streamEditT capthird (return . fmap toUpper) "a a a a a"
 
 <http://hackage.haskell.org/package/template>
 
-<http://hackage.haskell.org/package/regex-applicative>
+<https://github.com/RaminHAL9001/parser-sed-thing>
 
-http://hackage.haskell.org/package/substring-parser
-
-https://github.com/RaminHAL9001/parser-sed-thing
-
-http://hackage.haskell.org/package/attosplit
+<http://hackage.haskell.org/package/attosplit>
 
 ## Hypothetically Asked Questions
 
@@ -245,24 +229,6 @@ http://hackage.haskell.org/package/attosplit
    backtrack each time. That's
    [a slow activity](https://markkarpov.com/megaparsec/megaparsec.html#writing-efficient-parsers).
 
-   Consider a 1 megabyte file that consists of `"foo"` every ten bytes:
-
-   ```
-          foo       foo       foo       foo       foo       foo ...
-   ```
-
-   We want to replace all the `"foo"` with `"bar"`. We would expect `sed`
-   to be about at the upper bound of speed for this task, so here
-   are the `perf` results when we compare `sed s/foo/bar/g`
-   to __replace-megaparsec__ with some different stream types.
-
-   | Method                  | `perf task-clock` |
-   | :---                    |              ---: |
-   | `sed`                   | 39 msec           |
-   | `streamEdit String`     | 793 msec          |
-   | `streamEdit ByteString` | 513 msec          |
-   | `streamEdit Text`       | 428 msec          |
-
 2. *Could we write this library for __parsec__?*
 
    No, because the
@@ -270,9 +236,4 @@ http://hackage.haskell.org/package/attosplit
    combinator doesn't exist for __parsec__. (I can't find it anywhere.
    [Can it be written?](http://www.serpentine.com/blog/2014/05/31/attoparsec/#from-strings-to-buffers-and-cursors))
 
-3. *Could we write this library for __attoparsec__?*
-
-   I think so, but I wouldn't expect much of a speed improvement, because
-   again, `sepCap` is a fundamentally slow activity, and anyway
-   [__megaparsec__ is as fast as __attoparsec__](https://github.com/mrkkrp/megaparsec#performance).
 
