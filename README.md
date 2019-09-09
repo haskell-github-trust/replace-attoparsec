@@ -124,7 +124,7 @@ Capture the parsed hexadecimal number, as well as the string section which
 parses as a hexadecimal number.
 
 ```haskell
-let hexparser = chunk "0x" >> hexadecimal :: Parsec Void String Integer
+let hexparser = chunk "0x" >> hexadecimal :: Parser Integer
 fromRight [] $ parseOnly (findAllCap hexparser) "0xA 000 0xFFFF"
 ```
 ```haskell
