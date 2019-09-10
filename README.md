@@ -218,10 +218,10 @@ streamEdit (match hexparser) (\(s,r) -> if r <= 16 then T.pack (show r) else s) 
 
 ```haskell
 import System.Environment
-streamEditT (char '{' *> manyTill anyChar (char '}')) (fmap T.pack . getEnv) "{HOME}"
+streamEditT (char '{' *> manyTill anyChar (char '}')) (fmap T.pack . getEnv) "- {HOME} -"
 ```
 ```haskell
-"/home/jbrock"
+"- /home/jbrock -"
 ```
 
 ## Alternatives
