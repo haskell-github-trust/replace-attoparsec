@@ -1,5 +1,5 @@
 name:                replace-attoparsec
-version:             0.1.0.0
+version:             1.0.0.0
 cabal-version:       >=1.10
 synopsis:            Stream editing with Attoparsec
 homepage:            https://github.com/jamesdbrock/replace-attoparsec
@@ -29,7 +29,6 @@ library
                      , bytestring
                      , text
   default-language:    Haskell2010
-  -- exposed-modules:     Replace.Attoparsec
   exposed-modules:     Replace.Attoparsec.Text
                      , Replace.Attoparsec.ByteString
   ghc-options:         -O2 -Wall
