@@ -1,5 +1,5 @@
 # Revision history for replace-attoparsec
 
-## 0.1.0.0 -- YYYY-mm-dd
+## 1.0.0.0 -- 2019-09-10
 
-* First version. Released on an unsuspecting world.
+* First version.
