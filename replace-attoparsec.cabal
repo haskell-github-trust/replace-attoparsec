@@ -1,7 +1,7 @@
 name:                replace-attoparsec
 version:             1.0.0.0
 cabal-version:       1.18
-synopsis:            Stream editing with Attoparsec
+synopsis:            Stream editing with Attoparsec parsers
 homepage:            https://github.com/jamesdbrock/replace-attoparsec
 bug-reports:         https://github.com/jamesdbrock/replace-attoparsec/issues
 license:             BSD2
