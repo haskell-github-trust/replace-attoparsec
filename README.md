@@ -149,6 +149,28 @@ fromRight [] $ parseOnly (return . rights =<< sepCap spaceoffset) " a  b  "
 [0,2,5]
 ```
 
+#### Pattern match balanced parentheses
+
+Find the outer parentheses of all balanced nested parentheses.
+Here's an example of matching a pattern that can't be expressed by a regular
+expression. We can express the pattern with a recursive parser.
+
+```haskell
+:{
+let parens :: Parser ()
+    parens = do
+        char '('
+        manyTill
+            (void (satisfy $ notInClass "()") <|> void parens)
+            (char ')')
+        return ()
+:}
+fromRight [] $ parseOnly (findAll parens) "(()) (()())"
+```
+```haskell
+[Right "(())",Left " ",Right "(()())"]
+```
+
 ### Edit text strings by running parsers with `streamEdit`
 
 The following examples show how to search for a pattern in a string of text
