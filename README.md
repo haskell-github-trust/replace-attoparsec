@@ -156,7 +156,6 @@ Here's an example of matching a pattern that can't be expressed by a regular
 expression. We can express the pattern with a recursive parser.
 
 ```haskell
-:{
 let parens :: Parser ()
     parens = do
         char '('
@@ -164,7 +163,7 @@ let parens :: Parser ()
             (void (satisfy $ notInClass "()") <|> void parens)
             (char ')')
         return ()
-:}
+
 fromRight [] $ parseOnly (findAll parens) "(()) (()())"
 ```
 ```haskell
