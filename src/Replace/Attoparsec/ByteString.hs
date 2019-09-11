@@ -173,7 +173,7 @@ findAll sep = (fmap.fmap) (second fst) $ sepCap (match sep)
 -- If you want access to the matched string in the @editor@ function,
 -- then combine the pattern parser @sep@
 -- with 'Data.Attoparsec.ByteString.match'. This will effectively change
--- the type of the @editor@ function to @(s,a) -> s@.
+-- the type of the @editor@ function to @(ByteString,a) -> ByteString@.
 --
 -- This allows us to write an @editor@ function which can choose to not
 -- edit the match and just leave it as it is. If the @editor@ function
