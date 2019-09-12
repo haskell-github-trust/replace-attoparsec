@@ -52,9 +52,12 @@ import Data.Bifunctor
 import Control.Applicative
 import Control.Monad
 import Data.Attoparsec.Text
+import Data.Attoparsec.Text.Lazy as AL
 import qualified Data.Text as T
 import qualified Data.Attoparsec.Internal.Types as AT
 
+import qualified Data.Text.Lazy       as Lazy
+-- import qualified Data.Text as Strict
 -- |
 -- == Separate and capture
 --
@@ -88,10 +91,10 @@ import qualified Data.Attoparsec.Internal.Types as AT
 -- of throwing it away.
 --
 {-# INLINABLE sepCap #-}
-sepCap
+sepCap'
     :: Parser a -- ^ The pattern matching parser @sep@
     -> Parser [Either T.Text a]
-sepCap sep = (fmap.fmap) (first T.pack)
+sepCap' sep = (fmap.fmap) (first T.pack)
              $ fmap sequenceLeft
              $ many $ fmap Right (consumeSome sep) <|> fmap Left anyChar
   where
@@ -104,12 +107,46 @@ sepCap sep = (fmap.fmap) (first T.pack)
         consLeft (Right r) xs = (Right r):xs
     -- If sep succeeds and consumes 0 input tokens, we must force it to fail,
     -- otherwise infinite loop
-    consumeSome p = do
-        offset1 <- getOffset
-        x <- p
-        offset2 <- getOffset
-        when (offset1 >= offset2) empty
-        return x
+
+consumeSome p = do
+    offset1 <- getOffset
+    x <- p
+    offset2 <- getOffset
+    when (offset1 >= offset2) empty
+    return x
+
+-- | 'Strict.Text' from the "Data.Text" module
+type StrictText = T.Text
+
+-- | 'Lazy.Text' from the "Data.Text.Lazy" module.
+type LazyText   = Lazy.Text
+
+-- | The 'sed' function returns a list of these. 'Left' values contain portions of the input string
+-- that did not match the given 'Parser', 'Right' values contain portions of the input string that
+-- did match, along with the return value of the 'Parser'.
+-- type SedResult a = Either StrictText (StrictText, a)
+
+
+-- | This is a lazy Text parser (operates on 'Strict.Text' types in the "Data.Text.Lazy" module),
+-- but returns strict 'Strict.Text' types (from the "Data.Text" module).
+sepCap :: Parser a -> Parser [Either T.Text a]
+sepCap p = Lazy.fromStrict <$> takeText >>= loop id where
+  scan unmatched instr =
+    if Lazy.null instr then return (((Left $ Lazy.toStrict unmatched) :), Lazy.empty) else
+      case AL.parse (consumeSome p) instr of
+        AL.Done remainder a -> return -- Parser succeeded, back to main loop
+          ( (if Lazy.null unmatched then id else ((Left $ Lazy.toStrict unmatched) :)) .
+            ((Right a) :)
+          , remainder
+          )
+        _                -> -- Parser failed, continue scanning
+          scan (unmatched <> Lazy.singleton (Lazy.head instr)) (Lazy.tail instr)
+  loop stack = scan Lazy.empty >=> \ (result, remainder) -> do
+    stack <- pure $ stack . result
+    if Lazy.null remainder then return $ stack [] else loop stack remainder
+
+
+
 
 -- |
 -- == Find all occurences, parse and capture pattern matches
