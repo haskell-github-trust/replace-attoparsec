@@ -224,6 +224,49 @@ streamEditT (char '{' *> manyTill anyChar (char '}')) (fmap T.pack . getEnv) "- 
 "- /home/jbrock -"
 ```
 
+
+## In the Shell
+
+If we're going to have a viable `sed` replacement then we want to be able
+to use it easily from the command line. This script uses the
+[Stack script interpreter](https://docs.haskellstack.org/en/stable/GUIDE/#script-interpreter)
+To find decimal numbers in a stream and replace them with their double.
+
+```haskell
+#!/usr/bin/env stack
+{- stack
+  script
+  --resolver nightly-2019-09-13
+  --package attoparsec
+  --package text
+  --package text-show
+  --package replace-attoparsec
+-}
+-- https://docs.haskellstack.org/en/stable/GUIDE/#script-interpreter
+
+{-# LANGUAGE OverloadedStrings #-}
+
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
+import TextShow
+import Data.Attoparsec.Text
+import Replace.Attoparsec.Text
+
+main = T.interact $ streamEdit decimal (showt . (* (2::Integer)))
+```
+
+If you have
+[The Haskell Tool Stack](https://docs.haskellstack.org/en/stable/README/)
+installed then you can just copy-paste this into a file named `script.hs` and
+run it. (On the first run Stack may need to download the dependencies.)
+
+```bash
+$ chmod u+x script.hs
+$ echo "1 6 21 107" | ./script.hs
+2 12 42 214
+```
+
+
 ## Alternatives
 
 <http://hackage.haskell.org/package/regex-applicative>
