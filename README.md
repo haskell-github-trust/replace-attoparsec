@@ -4,6 +4,11 @@
 [![Stackage Nightly](http://stackage.org/package/replace-attoparsec/badge/nightly)](http://stackage.org/nightly/package/replace-attoparsec)
 [![Stackage LTS](http://stackage.org/package/replace-attoparsec/badge/lts)](http://stackage.org/lts/package/replace-attoparsec)
 
+* [Examples](#examples)
+* [In the Shell](#in-the-shell)
+* [Alternatives](#alternatives)
+* [Hypothetically Asked Questions](#hypothetically-asked-questions)
+
 __replace-attoparsec__ is for finding text patterns, and also editing and
 replacing the found patterns.
 This activity is traditionally done with regular expressions,
