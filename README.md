@@ -72,7 +72,7 @@ version.
   this library, instead of a template, we get
   an `editor` function which can perform any computation, including IO.
 
-## Examples
+# Examples
 
 Try the examples in `ghci` by
 running `cabal v2-repl` in the `replace-attoparsec/`
@@ -89,13 +89,13 @@ import Data.Either
 import Data.Char
 ```
 
-### Parsing with `sepCap` family of parser combinators
+## Parsing with `sepCap` family of parser combinators
 
 The following examples show how to match a pattern to a string of text
 and deconstruct the string of text by separating it into sections
 which match the pattern, and sections which don't match.
 
-#### Pattern match, capture only the parsed result with `sepCap`
+### Pattern match, capture only the parsed result with `sepCap`
 
 Separate the input string into sections which can be parsed as a hexadecimal
 number with a prefix `"0x"`, and sections which can't.
@@ -108,7 +108,7 @@ fromRight [] $ parseOnly (sepCap hexparser) "0xA 000 0xFFFF"
 [Right 10,Left " 000 ",Right 65535]
 ```
 
-#### Pattern match, capture only the matched text with `findAll`
+### Pattern match, capture only the matched text with `findAll`
 
 Just get the strings sections which match the hexadecimal parser, throw away
 the parsed number.
@@ -121,7 +121,7 @@ fromRight [] $ parseOnly (findAll hexparser) "0xA 000 0xFFFF"
 [Right "0xA",Left " 000 ",Right "0xFFFF"]
 ```
 
-#### Pattern match, capture the matched text and the parsed result with `findAllCap`
+### Pattern match, capture the matched text and the parsed result with `findAllCap`
 
 Capture the parsed hexadecimal number, as well as the string section which
 parses as a hexadecimal number.
@@ -134,7 +134,7 @@ fromRight [] $ parseOnly (findAllCap hexparser) "0xA 000 0xFFFF"
 [Right ("0xA",10),Left " 000 ",Right ("0xFFFF",65535)]
 ```
 
-#### Pattern match, capture only the locations of the matched patterns
+### Pattern match, capture only the locations of the matched patterns
 
 Find all of the sections of the stream which match
 a string of whitespace.
@@ -149,7 +149,7 @@ fromRight [] $ parseOnly (return . rights =<< sepCap spaceoffset) " a  b  "
 [0,2,5]
 ```
 
-#### Pattern match balanced parentheses
+### Pattern match balanced parentheses
 
 Find the outer parentheses of all balanced nested parentheses.
 Here's an example of matching a pattern that can't be expressed by a regular
@@ -170,13 +170,13 @@ fromRight [] $ parseOnly (findAll parens) "(()) (()())"
 [Right "(())",Left " ",Right "(()())"]
 ```
 
-### Edit text strings by running parsers with `streamEdit`
+## Edit text strings by running parsers with `streamEdit`
 
 The following examples show how to search for a pattern in a string of text
 and then edit the string of text to substitute in some replacement text
 for the matched patterns.
 
-#### Pattern match and replace with a constant
+### Pattern match and replace with a constant
 
 Replace all carriage-return-newline instances with newline.
 
@@ -187,7 +187,7 @@ streamEdit (string "\r\n") (const "\n") "1\r\n2\r\n"
 "1\n2\n"
 ```
 
-#### Pattern match and edit the matches
+### Pattern match and edit the matches
 
 Replace alphabetic characters with the next character in the alphabet.
 
@@ -198,7 +198,7 @@ streamEdit (AT.takeWhile isLetter) (T.map succ) "HAL 9000"
 "IBM 9000"
 ```
 
-#### Pattern match and maybe edit the matches, or maybe leave them alone
+### Pattern match and maybe edit the matches, or maybe leave them alone
 
 Find all of the string sections *`s`* which can be parsed as a
 hexadecimal number *`r`*,
@@ -214,7 +214,10 @@ streamEdit (match hexparser) (\(s,r) -> if r <= 16 then T.pack (show r) else s) 
 "10 000 0xFFFF"
 ```
 
-#### Pattern match and edit the matches with IO
+### Pattern match and edit the matches with IO
+
+Find an environment variable in curly braces and replace it with its
+value from the environment.
 
 ```haskell
 import System.Environment
@@ -225,7 +228,7 @@ streamEditT (char '{' *> manyTill anyChar (char '}')) (fmap T.pack . getEnv) "- 
 ```
 
 
-## In the Shell
+# In the Shell
 
 If we're going to have a viable `sed` replacement then we want to be able
 to use it easily from the command line. This script uses the
@@ -267,7 +270,7 @@ $ echo "1 6 21 107" | ./script.hs
 ```
 
 
-## Alternatives
+# Alternatives
 
 <http://hackage.haskell.org/package/regex-applicative>
 
@@ -287,7 +290,7 @@ $ echo "1 6 21 107" | ./script.hs
 
 <http://hackage.haskell.org/package/attosplit>
 
-## Hypothetically Asked Questions
+# Hypothetically Asked Questions
 
 1. *Is it fast?*
 
