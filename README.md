@@ -4,7 +4,7 @@
 [![Stackage Nightly](http://stackage.org/package/replace-attoparsec/badge/nightly)](http://stackage.org/nightly/package/replace-attoparsec)
 [![Stackage LTS](http://stackage.org/package/replace-attoparsec/badge/lts)](http://stackage.org/lts/package/replace-attoparsec)
 
-* [Examples](#examples)
+* [Usage Examples](#usage-examples)
 * [In the Shell](#in-the-shell)
 * [Alternatives](#alternatives)
 * [Hypothetically Asked Questions](#hypothetically-asked-questions)
@@ -77,7 +77,7 @@ version.
   this library, instead of a template, we get
   an `editor` function which can perform any computation, including IO.
 
-# Examples
+# Usage Examples
 
 Try the examples in `ghci` by
 running `cabal v2-repl` in the `replace-attoparsec/`
@@ -276,6 +276,8 @@ $ echo "1 6 21 107" | ./script.hs
 
 
 # Alternatives
+
+Some libraries that one might consider instead of this one.
 
 <http://hackage.haskell.org/package/regex-applicative>
 
