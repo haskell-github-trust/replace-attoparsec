@@ -1,5 +1,5 @@
 name:                replace-attoparsec
-version:             1.0.1.0
+version:             1.0.2.0
 cabal-version:       1.18
 synopsis:            Stream edit, find-and-replace with Attoparsec parsers
 homepage:            https://github.com/jamesdbrock/replace-attoparsec
