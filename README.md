@@ -37,7 +37,8 @@ or
 See [__replace-megaparsec__](https://hackage.haskell.org/package/replace-megaparsec)
 for the
 [__megaparsec__](http://hackage.haskell.org/package/megaparsec)
-version.
+version. ([__megaparsec__ is as fast as __attoparsec__.](https://github.com/mrkkrp/megaparsec#performance))
+
 
 ## Why would we want to do pattern matching and substitution with parsers instead of regular expressions?
 

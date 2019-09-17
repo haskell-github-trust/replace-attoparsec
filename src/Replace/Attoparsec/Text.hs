@@ -1,5 +1,8 @@
 -- |
 -- Module    : Replace.Attoparsec.Text
+-- Copyright : ©2019 James Brock
+-- License   : BSD2
+-- Maintainer: James Brock <jamesbrock@gmail.com>
 --
 -- __Replace.Attoparsec__ is for finding text patterns, and also editing and
 -- replacing the found patterns.
