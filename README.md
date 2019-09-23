@@ -298,6 +298,8 @@ Some libraries that one might consider instead of this one.
 
 <http://hackage.haskell.org/package/attosplit>
 
+<https://github.com/ChrisPenner/lens-regex-pcre>
+
 # Hypothetically Asked Questions
 
 1. *Is it fast?*
