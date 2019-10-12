@@ -31,6 +31,7 @@
 -- See the __[replace-attoparsec](https://hackage.haskell.org/package/replace-attoparsec)__ package README for usage examples.
 
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Replace.Attoparsec.Text
   (
@@ -48,15 +49,16 @@ module Replace.Attoparsec.Text
   )
 where
 
--- import Control.Exception (SomeException, throw)
 import Data.Functor.Identity
 import Data.Bifunctor
--- import Data.Char
 import Control.Applicative
 import Control.Monad
+import Data.Foldable
 import Data.Attoparsec.Text
 import qualified Data.Text as T
 import qualified Data.Attoparsec.Internal.Types as AT
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Builder as TLB
 
 -- |
 -- == Separate and capture
@@ -90,7 +92,6 @@ import qualified Data.Attoparsec.Internal.Types as AT
 -- but, importantly, it returns the parsed result of the @sep@ parser instead
 -- of throwing it away.
 --
-{-# INLINABLE sepCap #-}
 sepCap
     :: Parser a -- ^ The pattern matching parser @sep@
     -> Parser [Either T.Text a]
@@ -113,6 +114,7 @@ sepCap sep = (fmap.fmap) (first T.pack)
         offset2 <- getOffset
         when (offset1 >= offset2) empty
         return x
+{-# INLINABLE sepCap #-}
 
 -- |
 -- == Find all occurences, parse and capture pattern matches
@@ -128,12 +130,11 @@ sepCap sep = (fmap.fmap) (first T.pack)
 -- @
 -- findAllCap sep = 'sepCap' ('Data.Attoparsec.Text.match' sep)
 -- @
-{-# INLINABLE findAllCap #-}
 findAllCap
     :: Parser a -- ^ The pattern matching parser @sep@
     -> Parser [Either T.Text (T.Text, a)]
 findAllCap sep = sepCap (match sep)
-
+{-# INLINABLE findAllCap #-}
 
 -- |
 -- == Find all occurences
@@ -149,12 +150,11 @@ findAllCap sep = sepCap (match sep)
 -- @
 -- findAll sep = (fmap.fmap) ('Data.Bifunctor.second' fst) $ 'sepCap' ('Data.Attoparsec.Text.match' sep)
 -- @
-{-# INLINABLE findAll #-}
 findAll
     :: Parser a -- ^ The pattern matching parser @sep@
     -> Parser [Either T.Text T.Text]
 findAll sep = (fmap.fmap) (second fst) $ sepCap (match sep)
-
+{-# INLINABLE findAll #-}
 
 -- |
 -- == Stream editor
@@ -184,9 +184,7 @@ findAll sep = (fmap.fmap) (second fst) $ sepCap (match sep)
 -- @
 -- streamEdit ('Data.Attoparsec.Text.match' sep) 'Data.Tuple.fst' ≡ 'Data.Function.id'
 -- @
-{-# INLINABLE streamEdit #-}
 streamEdit
-    -- :: forall s a. (Stream s, Monoid s, Tokens s ~ s, Show s, Show (Token s), Typeable s)
     :: Parser a
         -- ^ The parser @sep@ for the pattern of interest.
     -> (a -> T.Text)
@@ -196,7 +194,7 @@ streamEdit
         -- ^ The input stream of text to be edited.
     -> T.Text
 streamEdit sep editor = runIdentity . streamEditT sep (Identity . editor)
-
+{-# INLINABLE streamEdit #-}
 
 -- |
 -- == Stream editor transformer
@@ -210,7 +208,6 @@ streamEdit sep editor = runIdentity . streamEditT sep (Identity . editor)
 --
 -- If you want the @editor@ function to remember some state,
 -- then run this in a stateful monad.
-{-# INLINABLE streamEditT #-}
 streamEditT
     :: (Monad m)
     => Parser a
@@ -221,7 +218,61 @@ streamEditT
     -> T.Text
         -- ^ The input stream of text to be edited.
     -> m T.Text
-streamEditT sep editor input = do
+streamEditT sep editor input =
+    case parseOnly (sepCapRaw sep) input of
+        (Left err) -> error err
+        -- this function should never error, because it only errors
+        -- when the 'sepCap' parser fails, and the 'sepCap' parser
+        -- can never fail. If this function ever throws an error, please
+        -- report that as a bug.
+        -- (We don't use MonadFail because Identity is not a MonadFail.)
+        (Right r) -> TL.toStrict <$> TLB.toLazyText <$> foldrM buildText mempty r
+        -- Omitting the TL.toStrict and returning lazy text and
+        -- printing with Data.Text.Lazy.IO.putStr doesn't speed it up.
+  where
+    -- A version of sepCap which doesn't concat the non-matching characters
+    -- with `sequenceLeft`.
+    sepCapRaw
+        :: Parser a -- ^ The pattern matching parser @sep@
+        -> Parser [Either Char a]
+    sepCapRaw sep' = many $ fmap Right (consumeSome sep') <|> fmap Left anyChar
+    -- Prepend the result to a builder, appropriate for foldr, see
+    -- https://hackage.haskell.org/package/text/docs/Data-Text-Lazy-Builder.html
+    buildText (Left c) builder = return $ TLB.singleton c <> builder
+    buildText (Right x) builder = flip mappend builder <$> TLB.fromText <$> editor x
+    -- If sep succeeds and consumes 0 input tokens, we must force it to fail,
+    -- otherwise infinite loop
+    consumeSome p = {-# SCC consumeSome #-} do
+        offset1 <- getOffset
+        x <- {-# SCC sep #-} p
+        offset2 <- getOffset
+        when (offset1 >= offset2) empty
+        return x
+{-# INLINABLE streamEditT #-}
+
+-- | Get the 'Data.Attoparsec.Text.Parser' ’s current offset position in the stream.
+--
+-- [“… you know you're in an uncomfortable state of sin :-)” — bos](https://github.com/bos/attoparsec/issues/101)
+getOffset :: Parser Int
+getOffset = AT.Parser $ \t pos more _ succ' -> succ' t pos more (AT.fromPos pos)
+{-# INLINABLE getOffset #-}
+
+
+-- This is the non-specialized version of streamEditT' which uses `sepCap`.
+-- It is unexported in this library, but left in the source code for comparison.
+-- This version is faster for the "sparse" benchmark, but the specialized
+-- version is faster for the "dense" benchmark. See replace-benchmark.
+_streamEditT
+    :: (Monad m)
+    => Parser a
+        -- ^ The parser @sep@ for the pattern of interest.
+    -> (a -> m T.Text)
+        -- ^ The @editor@ function. Takes a parsed result of @sep@
+        -- and returns a new stream section for the replacement.
+    -> T.Text
+        -- ^ The input stream of text to be edited.
+    -> m T.Text
+_streamEditT sep editor input = do
     case parseOnly (sepCap sep) input of
         (Left err) -> error err
         -- this function should never error, because it only errors
@@ -231,10 +282,3 @@ streamEditT sep editor input = do
         -- (We don't use MonadFail because Identity is not a MonadFail.)
         (Right r) -> fmap mconcat $ traverse (either return editor) r
 
-
--- | Get the 'Data.Attoparsec.Text.Parser' ’s current offset position in the stream.
---
--- [“… you know you're in an uncomfortable state of sin :-)” — bos](https://github.com/bos/attoparsec/issues/101)
-getOffset :: Parser Int
-getOffset = AT.Parser $ \t pos more _ succ' -> succ' t pos more (AT.fromPos pos)
-{-# INLINABLE getOffset #-}
