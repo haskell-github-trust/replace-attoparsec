@@ -102,14 +102,14 @@ sepCap sep = (fmap.fmap) (first T.pack)
     sequenceLeft = foldr consLeft []
       where
         consLeft :: Either l r -> [Either [l] r] -> [Either [l] r]
-        consLeft (Left l) ((Left ls):xs) = (Left (l:ls)):xs
-        consLeft (Left l) xs = (Left [l]):xs
-        consLeft (Right r) xs = (Right r):xs
+        consLeft (Left l) ((Left ls):xs) = {-# SCC consLeft #-} (Left (l:ls)):xs
+        consLeft (Left l) xs = {-# SCC consLeft #-} (Left [l]):xs
+        consLeft (Right r) xs = {-# SCC consLeft #-} (Right r):xs
     -- If sep succeeds and consumes 0 input tokens, we must force it to fail,
     -- otherwise infinite loop
-    consumeSome p = do
+    consumeSome p = {-# SCC consumeSome #-} do
         offset1 <- getOffset
-        x <- p
+        x <- {-# SCC sep #-} p
         offset2 <- getOffset
         when (offset1 >= offset2) empty
         return x
