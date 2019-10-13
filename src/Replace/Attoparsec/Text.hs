@@ -237,4 +237,4 @@ streamEditT sep editor input = do
 -- [“… you know you're in an uncomfortable state of sin :-)” — bos](https://github.com/bos/attoparsec/issues/101)
 getOffset :: Parser Int
 getOffset = AT.Parser $ \t pos more _ succ' -> succ' t pos more (AT.fromPos pos)
-
+{-# INLINABLE getOffset #-}
