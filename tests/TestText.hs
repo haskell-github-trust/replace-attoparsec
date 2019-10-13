@@ -39,6 +39,8 @@ tests = return
         (sepCap (return (read "a" :: Int) :: Parser Int))
         ("a")
         ([Left "a"])
+    , Test $ streamEditTest "x to o" (string "x") (const "o") "x x x" "o o o"
+    , Test $ streamEditTest "ordering" (string "456") (const "ABC") "123456789" "123ABC789"
     ]
   where
     runParserTest nam p input expected = TestInstance
@@ -50,7 +52,20 @@ tests = return
                             then return (Finished Pass)
                             else return (Finished $ TestSuite.Fail
                                         $ show output ++ " ≠ " ++ show expected)
-            , name = nam
+            , name = "sepCap " ++ nam
+            , tags = []
+            , options = []
+            , setOption = \_ _ -> Left "no options supported"
+            }
+
+    streamEditTest nam sep editor input expected = TestInstance
+            { run = do
+                let output = streamEdit sep editor input
+                if (output == expected)
+                    then return (Finished Pass)
+                    else return (Finished $ TestSuite.Fail
+                                $ show output ++ " ≠ " ++ show expected)
+            , name = "streamEdit " ++ nam
             , tags = []
             , options = []
             , setOption = \_ _ -> Left "no options supported"
