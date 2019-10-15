@@ -48,13 +48,15 @@ module Replace.Attoparsec.ByteString
   )
 where
 
--- import Control.Exception (SomeException, throw)
 import Data.Functor.Identity
 import Data.Bifunctor
 import Control.Applicative
 import Control.Monad
+import Data.Foldable
 import Data.Attoparsec.ByteString
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Builder as BB
 import GHC.Word
 import qualified Data.Attoparsec.Internal.Types as AT
 
@@ -90,7 +92,6 @@ import qualified Data.Attoparsec.Internal.Types as AT
 -- but, importantly, it returns the parsed result of the @sep@ parser instead
 -- of throwing it away.
 --
-{-# INLINABLE sepCap #-}
 sepCap
     :: Parser a -- ^ The pattern matching parser @sep@
     -> Parser [Either B.ByteString a]
@@ -117,6 +118,7 @@ sepCap sep = (fmap.fmap) (first B.pack)
         offset2 <- getOffset
         when (offset1 >= offset2) empty
         return x
+{-# INLINABLE sepCap #-}
 
 -- |
 -- == Find all occurences, parse and capture pattern matches
@@ -132,11 +134,11 @@ sepCap sep = (fmap.fmap) (first B.pack)
 -- @
 -- findAllCap sep = 'sepCap' ('Data.Attoparsec.ByteString.match' sep)
 -- @
-{-# INLINABLE findAllCap #-}
 findAllCap
     :: Parser a -- ^ The pattern matching parser @sep@
     -> Parser [Either B.ByteString (B.ByteString, a)]
 findAllCap sep = sepCap (match sep)
+{-# INLINABLE findAllCap #-}
 
 
 -- |
@@ -153,11 +155,11 @@ findAllCap sep = sepCap (match sep)
 -- @
 -- findAll sep = (fmap.fmap) ('Data.Bifunctor.second' fst) $ 'sepCap' ('Data.Attoparsec.ByteString.match' sep)
 -- @
-{-# INLINABLE findAll #-}
 findAll
     :: Parser a -- ^ The pattern matching parser @sep@
     -> Parser [Either B.ByteString B.ByteString]
 findAll sep = (fmap.fmap) (second fst) $ sepCap (match sep)
+{-# INLINABLE findAll #-}
 
 
 -- |
@@ -188,7 +190,6 @@ findAll sep = (fmap.fmap) (second fst) $ sepCap (match sep)
 -- @
 -- streamEdit ('Data.Attoparsec.ByteString.match' sep) 'Data.Tuple.fst' ≡ 'Data.Function.id'
 -- @
-{-# INLINABLE streamEdit #-}
 streamEdit
     -- :: forall s a. (Stream s, Monoid s, Tokens s ~ s, Show s, Show (Token s), Typeable s)
     :: Parser a
@@ -200,7 +201,7 @@ streamEdit
         -- ^ The input stream of text to be edited.
     -> B.ByteString
 streamEdit sep editor = runIdentity . streamEditT sep (Identity . editor)
-
+{-# INLINABLE streamEdit #-}
 
 -- |
 -- == Stream editor transformer
@@ -214,7 +215,6 @@ streamEdit sep editor = runIdentity . streamEditT sep (Identity . editor)
 --
 -- If you want the @editor@ function to remember some state,
 -- then run this in a stateful monad.
-{-# INLINABLE streamEditT #-}
 streamEditT
     :: (Monad m)
     => Parser a
@@ -225,7 +225,57 @@ streamEditT
     -> B.ByteString
         -- ^ The input stream of text to be edited.
     -> m B.ByteString
-streamEditT sep editor input = do
+streamEditT sep editor input =
+    case parseOnly (sepCapRaw sep) input of
+        (Left err) -> error err
+        -- this function should never error, because it only errors
+        -- when the 'sepCap' parser fails, and the 'sepCap' parser
+        -- can never fail. If this function ever throws an error, please
+        -- report that as a bug.
+        -- (We don't use MonadFail because Identity is not a MonadFail.)
+        (Right r) -> BL.toStrict <$> BB.toLazyByteString <$> foldrM buildText mempty r
+  where
+    -- A version of sepCap which doesn't mconcat the non-matching characters
+    -- with `sequenceLeft`.
+    sepCapRaw
+        :: Parser a -- ^ The pattern matching parser @sep@
+        -> Parser [Either Word8 a]
+    sepCapRaw sep' = many $ fmap Right (consumeSome sep') <|> fmap Left anyWord8
+    -- Prepend the result to a builder, appropriate for foldr, see
+    -- https://hackage.haskell.org/package/text/docs/Data-Text-Lazy-Builder.html
+    buildText (Left c) builder = return $ BB.word8 c <> builder
+    buildText (Right x) builder = flip mappend builder <$> BB.byteString <$> editor x
+    -- If sep succeeds and consumes 0 input tokens, we must force it to fail,
+    -- otherwise infinite loop
+    consumeSome p = {-# SCC consumeSome #-} do
+        offset1 <- getOffset
+        x <- {-# SCC sep #-} p
+        offset2 <- getOffset
+        when (offset1 >= offset2) empty
+        return x
+{-# INLINABLE streamEditT #-}
+
+-- | Get the 'Data.Attoparsec.ByteString.Parser' ’s current offset position in the stream.
+--
+-- [“… you know you're in an uncomfortable state of sin :-)” — bos](https://github.com/bos/attoparsec/issues/101)
+getOffset :: Parser Int
+getOffset = AT.Parser $ \t pos more _ succ' -> succ' t pos more (AT.fromPos pos)
+
+-- This is the non-specialized version of streamEditT which uses `sepCap`.
+-- It is unexported in this library, but left in the source code for comparison.
+-- This version is faster for the "sparse" benchmark, but the specialized
+-- version is faster for the "dense" benchmark. See replace-benchmark.
+_streamEditT
+    :: (Monad m)
+    => Parser a
+        -- ^ The parser @sep@ for the pattern of interest.
+    -> (a -> m B.ByteString)
+        -- ^ The @editor@ function. Takes a parsed result of @sep@
+        -- and returns a new stream section for the replacement.
+    -> B.ByteString
+        -- ^ The input stream of text to be edited.
+    -> m B.ByteString
+_streamEditT sep editor input = do
     case parseOnly (sepCap sep) input of
         (Left err) -> error err
         -- this function should never error, because it only errors
@@ -234,11 +284,4 @@ streamEditT sep editor input = do
         -- report that as a bug.
         -- (We don't use MonadFail because Identity is not a MonadFail.)
         (Right r) -> fmap mconcat $ traverse (either return editor) r
-
-
--- | Get the 'Data.Attoparsec.ByteString.Parser' ’s current offset position in the stream.
---
--- [“… you know you're in an uncomfortable state of sin :-)” — bos](https://github.com/bos/attoparsec/issues/101)
-getOffset :: Parser Int
-getOffset = AT.Parser $ \t pos more _ succ' -> succ' t pos more (AT.fromPos pos)
 
