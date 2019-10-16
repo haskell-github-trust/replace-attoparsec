@@ -53,12 +53,9 @@ import Data.Functor.Identity
 import Data.Bifunctor
 import Control.Applicative
 import Control.Monad
-import Data.Foldable
 import Data.Attoparsec.Text
 import qualified Data.Text as T
 import qualified Data.Attoparsec.Internal.Types as AT
-import qualified Data.Text.Lazy as TL
-import qualified Data.Text.Lazy.Builder as TLB
 
 -- |
 -- == Separate and capture
@@ -218,61 +215,7 @@ streamEditT
     -> T.Text
         -- ^ The input stream of text to be edited.
     -> m T.Text
-streamEditT sep editor input =
-    case parseOnly (sepCapRaw sep) input of
-        (Left err) -> error err
-        -- this function should never error, because it only errors
-        -- when the 'sepCap' parser fails, and the 'sepCap' parser
-        -- can never fail. If this function ever throws an error, please
-        -- report that as a bug.
-        -- (We don't use MonadFail because Identity is not a MonadFail.)
-        (Right r) -> TL.toStrict <$> TLB.toLazyText <$> foldrM buildText mempty r
-        -- Omitting the TL.toStrict and returning lazy text and
-        -- printing with Data.Text.Lazy.IO.putStr doesn't speed it up.
-  where
-    -- A version of sepCap which doesn't mconcat the non-matching characters
-    -- with `sequenceLeft`.
-    sepCapRaw
-        :: Parser a -- ^ The pattern matching parser @sep@
-        -> Parser [Either Char a]
-    sepCapRaw sep' = many $ fmap Right (consumeSome sep') <|> fmap Left anyChar
-    -- Prepend the result to a builder, appropriate for foldr, see
-    -- https://hackage.haskell.org/package/text/docs/Data-Text-Lazy-Builder.html
-    buildText (Left c) builder = return $ TLB.singleton c <> builder
-    buildText (Right x) builder = flip mappend builder <$> TLB.fromText <$> editor x
-    -- If sep succeeds and consumes 0 input tokens, we must force it to fail,
-    -- otherwise infinite loop
-    consumeSome p = {-# SCC consumeSome #-} do
-        offset1 <- getOffset
-        x <- {-# SCC sep #-} p
-        offset2 <- getOffset
-        when (offset1 >= offset2) empty
-        return x
-{-# INLINABLE streamEditT #-}
-
--- | Get the 'Data.Attoparsec.Text.Parser' ’s current offset position in the stream.
---
--- [“… you know you're in an uncomfortable state of sin :-)” — bos](https://github.com/bos/attoparsec/issues/101)
-getOffset :: Parser Int
-getOffset = AT.Parser $ \t pos more _ succ' -> succ' t pos more (AT.fromPos pos)
-{-# INLINABLE getOffset #-}
-
-
--- This is the non-specialized version of streamEditT' which uses `sepCap`.
--- It is unexported in this library, but left in the source code for comparison.
--- This version is faster for the "sparse" benchmark, but the specialized
--- version is faster for the "dense" benchmark. See replace-benchmark.
-_streamEditT
-    :: (Monad m)
-    => Parser a
-        -- ^ The parser @sep@ for the pattern of interest.
-    -> (a -> m T.Text)
-        -- ^ The @editor@ function. Takes a parsed result of @sep@
-        -- and returns a new stream section for the replacement.
-    -> T.Text
-        -- ^ The input stream of text to be edited.
-    -> m T.Text
-_streamEditT sep editor input = do
+streamEditT sep editor input = do
     case parseOnly (sepCap sep) input of
         (Left err) -> error err
         -- this function should never error, because it only errors
@@ -281,4 +224,12 @@ _streamEditT sep editor input = do
         -- report that as a bug.
         -- (We don't use MonadFail because Identity is not a MonadFail.)
         (Right r) -> fmap mconcat $ traverse (either return editor) r
+{-# INLINABLE streamEditT #-}
+
+-- | Get the 'Data.Attoparsec.Text.Parser' ’s current offset position in the stream.
+--
+-- [“… you know you're in an uncomfortable state of sin :-)” — bos](https://github.com/bos/attoparsec/issues/101)
+getOffset :: Parser Int
+getOffset = AT.Parser $ \t pos more _ succ' -> succ' t pos more (AT.fromPos pos)
+{-# INLINABLE getOffset #-}
 
