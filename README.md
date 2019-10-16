@@ -299,24 +299,69 @@ Some libraries that one might consider instead of this one.
 
 <http://hackage.haskell.org/package/attosplit>
 
+# Benchmarks
+
+The benchmark task is to find all of the one-character patterns `x` in a
+text stream and replace them by a function which returns the constant
+string `oo`. So, like the regex `s/x/oo/g`.
+
+We have two benchmark input cases, which we call “dense” and “sparse”.
+
+The “dense” case is one megabyte of alternating spaces and `x`s
+like
+
+```
+x x x x x x x x x x x x x x x x x x x x x x x x x x x x
+```
+
+The “sparse” case is one megabyte of spaces with a single `x` in the middle
+like
+
+```
+                         x
+```
+
+Each benchmark program reads the input from `stdin`, replaces `x` with `oo`,
+and writes the result to `stdout`. The time elapsed is measured by `perf stat`.
+
+See [replace-benchmark](https://github.com/jamesdbrock/replace-benchmark)
+for details.
+
+| Program                                           | dense     | sparse    |
+| :---                                              |     ---:  |      ---: |
+| Python `re.sub`¹                                  | 90.63ms   |  23.14ms  |
+| Perl `s///ge`²                                    | 117.30ms  |  4.98ms   |
+| [`Replace.Megaparsec.streamEdit`][m] `String`     | 467.46ms  |  381.37ms |
+| [`Replace.Megaparsec.streamEdit`][m] `ByteString` | 646.57ms  |  445.92ms |
+| [`Replace.Megaparsec.streamEdit`][m] `Text`       | 616.94ms  |  350.64ms |
+| [`Replace.Attoparsec.ByteString.streamEdit`][ab]  | 533.05ms  |  405.42ms |
+| [`Replace.Attoparsec.Text.streamEdit`][at]        | 457.78ms  |  350.63ms |
+| [`Text.Regex.Applicative.replace`][ra] `String`   | 1091.00ms |  731.24ms |
+| [`Text.Regex.PCRE.Heavy.gsub`][ph] `Text`         | ⊥³        |  16.44ms  |
+
+¹ Python 3.7.4
+
+² This is perl 5, version 28, subversion 2 (v5.28.2) built for x86_64-linux-thread-multi
+
+³ Does not finish.
+
+[m]: https://hackage.haskell.org/package/replace-megaparsec/docs/Replace-Megaparsec.html#v:streamEdit
+[ab]: https://hackage.haskell.org/package/replace-attoparsec/docs/Replace-Attoparsec-ByteString.html#v:streamEdit
+[at]: https://hackage.haskell.org/package/replace-attoparsec/docs/Replace-Attoparsec-Text.html#v:streamEdit
+[ra]: http://hackage.haskell.org/package/regex-applicative/docs/Text-Regex-Applicative.html#v:replace
+[ph]: http://hackage.haskell.org/package/pcre-heavy/docs/Text-Regex-PCRE-Heavy.html
+
 
 # Hypothetically Asked Questions
 
-1. *Is it fast?*
-
-   lol not really. `sepCap` is fundamentally about consuming the stream one
-   token at a time while we try and fail to run a parser and then
-   backtrack each time. That's
-   [a slow activity](https://markkarpov.com/megaparsec/megaparsec.html#writing-efficient-parsers).
-
-2. *Could we write this library for __parsec__?*
+1. *Could we write this library for __parsec__?*
 
    No, because the
    [`match`](https://hackage.haskell.org/package/attoparsec/docs/Data-Attoparsec-Text.html#v:match)
    combinator doesn't exist for __parsec__. (I can't find it anywhere.
    [Can it be written?](http://www.serpentine.com/blog/2014/05/31/attoparsec/#from-strings-to-buffers-and-cursors))
 
-3. *Is this a good idea?*
+2. *Is this a good idea?*
 
    You may have heard it suggested that monadic parsers are better when
    the input stream is mostly signal, and regular expressions are better
