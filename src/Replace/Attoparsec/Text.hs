@@ -230,7 +230,7 @@ streamEditT sep editor input =
         -- Omitting the TL.toStrict and returning lazy text and
         -- printing with Data.Text.Lazy.IO.putStr doesn't speed it up.
   where
-    -- A version of sepCap which doesn't concat the non-matching characters
+    -- A version of sepCap which doesn't mconcat the non-matching characters
     -- with `sequenceLeft`.
     sepCapRaw
         :: Parser a -- ^ The pattern matching parser @sep@
