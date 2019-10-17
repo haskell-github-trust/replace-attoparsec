@@ -305,16 +305,16 @@ The benchmark task is to find all of the one-character patterns `x` in a
 text stream and replace them by a function which returns the constant
 string `oo`. So, like the regex `s/x/oo/g`.
 
-We have two benchmark input cases, which we call “dense” and “sparse”.
+We have two benchmark input cases, which we call __dense__ and __sparse__.
 
-The “dense” case is one megabyte of alternating spaces and `x`s
+The __dense__ case is one megabyte of alternating spaces and `x`s
 like
 
 ```
 x x x x x x x x x x x x x x x x x x x x x x x x x x x x
 ```
 
-The “sparse” case is one megabyte of spaces with a single `x` in the middle
+The __sparse__ case is one megabyte of spaces with a single `x` in the middle
 like
 
 ```
@@ -327,17 +327,17 @@ and writes the result to `stdout`. The time elapsed is measured by `perf stat`.
 See [replace-benchmark](https://github.com/jamesdbrock/replace-benchmark)
 for details.
 
-| Program                                           | dense     | sparse    |
-| :---                                              |     ---:  |      ---: |
-| Python `re.sub`¹                                  | 90.63ms   |  23.14ms  |
-| Perl `s///ge`²                                    | 117.30ms  |  4.98ms   |
-| [`Replace.Megaparsec.streamEdit`][m] `String`     | 467.46ms  |  381.37ms |
-| [`Replace.Megaparsec.streamEdit`][m] `ByteString` | 646.57ms  |  445.92ms |
-| [`Replace.Megaparsec.streamEdit`][m] `Text`       | 616.94ms  |  350.64ms |
-| [`Replace.Attoparsec.ByteString.streamEdit`][ab]  | 533.05ms  |  405.42ms |
-| [`Replace.Attoparsec.Text.streamEdit`][at]        | 457.78ms  |  350.63ms |
-| [`Text.Regex.Applicative.replace`][ra] `String`   | 1091.00ms |  731.24ms |
-| [`Text.Regex.PCRE.Heavy.gsub`][ph] `Text`         | ⊥³        |  16.44ms  |
+| Program                                           | dense     | sparse   |
+| :---                                              |      ---: |     ---: |
+| Python `re.sub`¹                                  | 89.23ms   | 23.98ms  |
+| Perl `s///ge`²                                    | 180.65ms  | 5.60ms   |
+| [`Replace.Megaparsec.streamEdit`][m] `String`     | 454.95ms  | 375.04ms |
+| [`Replace.Megaparsec.streamEdit`][m] `ByteString` | 611.98ms  | 433.26ms |
+| [`Replace.Megaparsec.streamEdit`][m] `Text`       | 592.66ms  | 353.32ms |
+| [`Replace.Attoparsec.ByteString.streamEdit`][ab]  | 537.57ms  | 407.33ms |
+| [`Replace.Attoparsec.Text.streamEdit`][at]        | 549.62ms  | 280.96ms |
+| [`Text.Regex.Applicative.replace`][ra] `String`   | 1083.98ms | 646.40ms |
+| [`Text.Regex.PCRE.Heavy.gsub`][ph] `Text`         | ⊥³        | 14.76ms  |
 
 ¹ Python 3.7.4
 
