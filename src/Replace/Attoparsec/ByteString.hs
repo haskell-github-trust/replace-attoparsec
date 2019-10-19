@@ -53,8 +53,8 @@ import Data.Bifunctor
 import Control.Applicative
 import Control.Monad
 import Data.Attoparsec.ByteString
-import qualified Data.ByteString as B
 import GHC.Word
+import qualified Data.ByteString as B
 import qualified Data.Attoparsec.Internal.Types as AT
 
 -- |
@@ -272,27 +272,18 @@ streamEditT
     -> B.ByteString
         -- ^ The input stream of text to be edited.
     -> m B.ByteString
-streamEditT sep editor input =
-    fmap mconcat $ traverse (either return editor) $ tryCap input 0
+streamEditT sep editor input = fmap mconcat $ sequence $ tryCap input 0
   where
-    -- tryPattern :: B.ByteString -> Maybe (a, Int)
-    -- tryPattern tale = parseOnly (measurePattern sep) tale of
-    --     (Left err) -> Nothing
-    --     (Right (_,0) -> Nothing -- Zero-width matches not allowed
-    --     (Right (x,len)) ->
-
     measurePattern = do
         x <- sep
         off <- getOffset
         pure (x, off)
     -- measurePattern = (,) <$> sep <*> getOffset
 
-    -- inputLen = B.length input
-
-    -- tryCap :: B.ByteString -> Int -> [Either B.ByteString a]
+    -- tryCap :: B.ByteString -> Int -> [m ByteString]
     tryCap tale indx
         | B.length tale == 0 = []
-        | indx >= B.length tale = [Left tale]
+        | indx >= B.length tale = [pure tale]
         | otherwise =
             let (before, notBefore) = B.splitAt indx tale
             in
@@ -303,7 +294,7 @@ streamEditT sep editor input =
                     let (_, after) = B.splitAt patLen notBefore
                     in
                     if indx==0
-                        then (Right x):tryCap after 0
-                        else (Left before):(Right x):tryCap after 0
+                        then (editor x):tryCap after 0
+                        else (pure before):(editor x):tryCap after 0
 
 
