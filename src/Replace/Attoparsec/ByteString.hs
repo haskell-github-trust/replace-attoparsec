@@ -298,3 +298,7 @@ streamEditT sep editor input = fmap mconcat $ sequence $ tryCap input 0
                         else (pure before):(editor x):tryCap after 0
 
 
+-- Problems:
+-- If I just re-write sepCap like this, then
+-- 1. getOffset and all the megaparsec line number magic won't work in
+--    sepCap anymore.
