@@ -53,12 +53,9 @@ import Data.Bifunctor
 import Control.Applicative
 import Control.Monad
 import Data.Attoparsec.ByteString
-import GHC.Word
-import Data.Foldable
 import qualified Data.ByteString as B
+import GHC.Word
 import qualified Data.Attoparsec.Internal.Types as AT
-import qualified Data.ByteString.Lazy as BL
-import qualified Data.ByteString.Builder as BB
 
 -- |
 -- == Separate and capture
@@ -265,7 +262,7 @@ _splitPattern pat input = go 0
                         (patmatch, after) = B.splitAt takeLen tale
                     in Just (before, patmatch, after)
 
-_'streamEditT
+streamEditT
     :: (Monad m)
     => Parser a
         -- ^ The parser @sep@ for the pattern of interest.
@@ -275,7 +272,7 @@ _'streamEditT
     -> B.ByteString
         -- ^ The input stream of text to be edited.
     -> m B.ByteString
-_'streamEditT sep editor input =
+streamEditT sep editor input =
     fmap mconcat $ traverse (either return editor) $ tryCap input 0
   where
     -- tryPattern :: B.ByteString -> Maybe (a, Int)
@@ -308,71 +305,5 @@ _'streamEditT sep editor input =
                     if indx==0
                         then (Right x):tryCap after 0
                         else (Left before):(Right x):tryCap after 0
-
-
-streamEditT
-    :: (Monad m)
-    => Parser a
-        -- ^ The parser @sep@ for the pattern of interest.
-    -> (a -> m B.ByteString)
-        -- ^ The @editor@ function. Takes a parsed result of @sep@
-        -- and returns a new stream section for the replacement.
-    -> B.ByteString
-        -- ^ The input stream of text to be edited.
-    -> m B.ByteString
-streamEditT sep editor input =
-    -- Keep the input ByteString strict.
-    -- The parser needs strict ByteStrings internally, and all of the
-    -- splitAting is only O(1) if the input ByteString is strict.
-    BL.toStrict <$> BB.toLazyByteString
-    <$> streamEditBuildT sep (editor') input
-  where
-    editor' x = BB.byteString <$> editor x
-
-streamEditBuildT
-    :: (Monad m)
-    => Parser a
-        -- ^ The parser @sep@ for the pattern of interest.
-    -> (a -> m BB.Builder)
-        -- ^ The @editor@ function. Takes a parsed result of @sep@
-        -- and returns a new stream section for the replacement.
-    -> B.ByteString
-        -- ^ The input stream of text to be edited.
-    -> m BB.Builder
-streamEditBuildT sep editor input =
-    -- foldrM mappend mempty $ tryCap input 0
-    fmap fold $ sequence $ tryCap input 0
-  where
-    -- buildText l r = return $ l <> r
-    -- tryPattern :: B.ByteString -> Maybe (a, Int)
-    -- tryPattern tale = parseOnly (measurePattern sep) tale of
-    --     (Left err) -> Nothing
-    --     (Right (_,0) -> Nothing -- Zero-width matches not allowed
-    --     (Right (x,len)) ->
-
-    measurePattern = do
-        x <- sep
-        off <- getOffset
-        pure (x, off)
-    -- measurePattern = (,) <$> sep <*> getOffset
-
-    -- inputLen = B.length input
-
-    -- tryCap :: B.ByteString -> Int -> [m BB.Builder]
-    tryCap tale indx
-        | B.length tale == 0 = []
-        | indx >= B.length tale = [pure (BB.byteString tale)]
-        | otherwise =
-            let (before, notBefore) = B.splitAt indx tale
-            in
-            case parseOnly measurePattern notBefore of
-                (Left _) -> tryCap tale (indx + 1)
-                (Right (_,0)) -> tryCap tale (indx + 1) --Zero-width matches not allowed
-                (Right (x,patLen)) ->
-                    let (_, after) = B.splitAt patLen notBefore
-                    in
-                    if indx==0
-                        then (editor x) : tryCap after 0
-                        else pure (BB.byteString before) : (editor x) : tryCap after 0
 
 
