@@ -212,7 +212,7 @@ streamEdit sep editor = runIdentity . streamEditT sep (Identity . editor)
 --
 -- If you want the @editor@ function to remember some state,
 -- then run this in a stateful monad.
-streamEditT
+_streamEditT
     :: (Monad m)
     => Parser a
         -- ^ The parser @sep@ for the pattern of interest.
@@ -222,7 +222,7 @@ streamEditT
     -> B.ByteString
         -- ^ The input stream of text to be edited.
     -> m B.ByteString
-streamEditT sep editor input = do
+_streamEditT sep editor input = do
     case parseOnly (sepCap sep) input of
         (Left err) -> error err
         -- this function should never error, because it only errors
@@ -238,4 +238,72 @@ streamEditT sep editor input = do
 -- [“… you know you're in an uncomfortable state of sin :-)” — bos](https://github.com/bos/attoparsec/issues/101)
 getOffset :: Parser Int
 getOffset = AT.Parser $ \t pos more _ succ' -> succ' t pos more (AT.fromPos pos)
+
+
+
+-- Zero-width matches are allowed.
+_splitPattern
+    :: (B.ByteString -> Maybe Int)
+    -> B.ByteString
+    -> Maybe (B.ByteString, B.ByteString, B.ByteString)
+_splitPattern pat input = go 0
+  where
+    inputLen = B.length input
+    go indx
+        | indx == inputLen = Nothing
+        | otherwise =
+            let (before, tale) = B.splitAt indx input
+            in
+            case pat tale of
+                Nothing -> go $ indx + 1
+                Just patLen ->
+                    -- The pat may say it wants more than is available
+                    let takeLen = min patLen $ inputLen - indx
+                        (patmatch, after) = B.splitAt takeLen tale
+                    in Just (before, patmatch, after)
+
+streamEditT
+    :: (Monad m)
+    => Parser a
+        -- ^ The parser @sep@ for the pattern of interest.
+    -> (a -> m B.ByteString)
+        -- ^ The @editor@ function. Takes a parsed result of @sep@
+        -- and returns a new stream section for the replacement.
+    -> B.ByteString
+        -- ^ The input stream of text to be edited.
+    -> m B.ByteString
+streamEditT sep editor input =
+    fmap mconcat $ traverse (either return editor) $ tryCap input 0
+  where
+    -- tryPattern :: B.ByteString -> Maybe (a, Int)
+    -- tryPattern tale = parseOnly (measurePattern sep) tale of
+    --     (Left err) -> Nothing
+    --     (Right (_,0) -> Nothing -- Zero-width matches not allowed
+    --     (Right (x,len)) ->
+
+    measurePattern = do
+        x <- sep
+        off <- getOffset
+        pure (x, off)
+    -- measurePattern = (,) <$> sep <*> getOffset
+
+    -- inputLen = B.length input
+
+    -- tryCap :: B.ByteString -> Int -> [Either B.ByteString a]
+    tryCap tale indx
+        | B.length tale == 0 = []
+        | indx >= B.length tale = [Left tale]
+        | otherwise =
+            let (before, notBefore) = B.splitAt indx tale
+            in
+            case parseOnly measurePattern notBefore of
+                (Left _) -> tryCap tale (indx + 1)
+                (Right (_,0)) -> tryCap tale (indx + 1) --Zero-width matches not allowed
+                (Right (x,patLen)) ->
+                    let (_, after) = B.splitAt patLen notBefore
+                    in
+                    if indx==0
+                        then (Right x):tryCap after 0
+                        else (Left before):(Right x):tryCap after 0
+
 
