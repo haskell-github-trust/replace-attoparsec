@@ -31,6 +31,7 @@
 -- See the __[replace-attoparsec](https://hackage.haskell.org/package/replace-attoparsec)__ package README for usage examples.
 
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Replace.Attoparsec.ByteString
   (
@@ -310,46 +311,60 @@ _streamEditT sep editor input = fmap mconcat $ sequence $ tryCap input 0
 
 
 
-sepCap sep = do
-    getOffset >>= go
+sepCap sep = getOffset >>= go
   where
-    go offsetBegin = do
-        offsetThis <- getOffset
+    -- the go function will search for the first pattern match,
+    -- and then capture the pattern match along with the preceding
+    -- unmatched string, and then recurse.
+    -- offsetBegin is the Pos in the buffer where go starts searching.
+    go !offsetBegin = do
+        !offsetThis <- getOffset
         (<|>)
             ( do
                 _ <- endOfInput
                 if offsetThis > offsetBegin
+                    -- If we're at the end of the input, then return whatever
+                    -- unmatched string we've got since offsetBegin
                     then substring offsetBegin offsetThis >>= (pure . pure . Left)
                     else pure []
             )
             ( do
-                thisiter <- fmap Just (consumeSome sep) <|> (anyWord8 >> return Nothing)
+                thisiter <- (<|>)
+                    ( do
+                        x <- sep
+                        !offsetAfter <- getOffset
+                        -- Don't allow a match of a zero-width pattern
+                        when (offsetAfter <= offsetThis) empty
+                        return $ Just (x, offsetAfter)
+                    )
+                    (anyWord8 >> return Nothing)
                 case thisiter of
-                    Just x | offsetThis > offsetBegin -> do
-                        offsetAfter <- getOffset
+                    (Just (x, !offsetAfter)) | offsetThis > offsetBegin -> do
+                        -- we've got a match with some preceding unmatched string
                         unmatched <- substring offsetBegin offsetThis
-                        fmap ((:) (Left unmatched) . (:) (Right x)) $ go offsetAfter
-                    Just x -> do
-                        offsetAfter <- getOffset
-                        fmap (Right x:) $ go offsetAfter
-                    Nothing -> go offsetBegin
+                        (Left unmatched:) <$> (Right x:) <$> go offsetAfter
+                    (Just (x, !offsetAfter)) -> do
+                        -- we're got a match with no preceding unmatched string
+                        (Right x:) <$> go offsetAfter
+                    Nothing -> go offsetBegin -- no match, try again
             )
 
 
-    consumeSome p = do
-        offset1 <- getOffset
-        x <- p
-        offset2 <- getOffset
-        when (offset1 >= offset2) empty
-        return x
-
 -- Extract a substring from part of the buffer that we've already visited.
+-- Does not check bounds.
 --
--- The idea here is that we go back and run the parser `take` on the buffer
--- at the Pos which we saved from before, and then we continue from the
--- current Pos.
+-- The idea here is that we go back and run the parser `take` at the Pos
+-- which we saved from before, and then we continue from the current Pos,
+-- hopefully without messing up the internal parser state.
+--
+-- Should be equivalent to the unexported function
+-- Data.Attoparsec.ByteString.Buffer.substring
+-- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.ByteString.Buffer.html#substring
+--
+-- This is a performance optimization for gathering the unmatched sections of
+-- the input. The alternative is to accumulate unmatched characters one anyWord8
+-- at a time in a list of [Word8] and then pack them into a ByteString.
 substring :: Int -> Int -> Parser B.ByteString
-substring pos1 pos2 = AT.Parser $ \t pos more lose succes ->
-    let succes' t' pos' more' a =
-            succes t pos more a
+substring !pos1 !pos2 = AT.Parser $ \t pos more lose succes ->
+    let succes' _ _ _ a = succes t pos more a
     in AT.runParser (A.take (pos2 - pos1)) t (AT.Pos pos1) more lose succes'
