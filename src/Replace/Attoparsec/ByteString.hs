@@ -52,10 +52,11 @@ import Data.Functor.Identity
 import Data.Bifunctor
 import Control.Applicative
 import Control.Monad
-import Data.Attoparsec.ByteString
+import Data.Attoparsec.ByteString as A
 import GHC.Word
 import qualified Data.ByteString as B
 import qualified Data.Attoparsec.Internal.Types as AT
+-- import qualified Data.Attoparsec.ByteString.Internal as AI
 
 -- |
 -- == Separate and capture
@@ -92,7 +93,7 @@ import qualified Data.Attoparsec.Internal.Types as AT
 sepCap
     :: Parser a -- ^ The pattern matching parser @sep@
     -> Parser [Either B.ByteString a]
-sepCap sep = (fmap.fmap) (first B.pack)
+_sepCap sep = (fmap.fmap) (first B.pack)
              $ fmap sequenceLeft
              $ many $ fmap Right (consumeSome sep) <|> fmap Left anyWord8
              -- TODO We might consider accumulating a Builder for Left instead
@@ -212,7 +213,7 @@ streamEdit sep editor = runIdentity . streamEditT sep (Identity . editor)
 --
 -- If you want the @editor@ function to remember some state,
 -- then run this in a stateful monad.
-_streamEditT
+streamEditT
     :: (Monad m)
     => Parser a
         -- ^ The parser @sep@ for the pattern of interest.
@@ -222,7 +223,7 @@ _streamEditT
     -> B.ByteString
         -- ^ The input stream of text to be edited.
     -> m B.ByteString
-_streamEditT sep editor input = do
+streamEditT sep editor input = do
     case parseOnly (sepCap sep) input of
         (Left err) -> error err
         -- this function should never error, because it only errors
@@ -262,17 +263,7 @@ _splitPattern pat input = go 0
                         (patmatch, after) = B.splitAt takeLen tale
                     in Just (before, patmatch, after)
 
-streamEditT
-    :: (Monad m)
-    => Parser a
-        -- ^ The parser @sep@ for the pattern of interest.
-    -> (a -> m B.ByteString)
-        -- ^ The @editor@ function. Takes a parsed result of @sep@
-        -- and returns a new stream section for the replacement.
-    -> B.ByteString
-        -- ^ The input stream of text to be edited.
-    -> m B.ByteString
-streamEditT sep editor input = fmap mconcat $ sequence $ tryCap input 0
+_streamEditT sep editor input = fmap mconcat $ sequence $ tryCap input 0
   where
     measurePattern = do
         x <- sep
@@ -302,3 +293,63 @@ streamEditT sep editor input = fmap mconcat $ sequence $ tryCap input 0
 -- If I just re-write sepCap like this, then
 -- 1. getOffset and all the megaparsec line number magic won't work in
 --    sepCap anymore.
+
+-- See http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.ByteString.Internal.html#substring
+
+-- splitter :: Parser a -> Parser (ByteString, Maybe a)
+-- splitter sep = AT.Parser $ \t pos more lose succ ->
+--     --let initPos = pos
+--     -- in go
+--     go pos more lose succ
+--   where
+--     go t' pos' more' lose' =
+--         case AT.runParser sep t' pos' more' AI.failK AI.successK of
+--             Fail _ _ _     -> AI.advance 1 >> AT.Parser go
+--             Done _ a       -> succ t' pos' more' (substring pos (pos' - pos), a)
+--             Partial contin -> error "what about partial?"
+
+
+
+sepCap sep = do
+    getOffset >>= go
+  where
+    go offsetBegin = do
+        offsetThis <- getOffset
+        (<|>)
+            ( do
+                _ <- endOfInput
+                if offsetThis > offsetBegin
+                    then substring offsetBegin offsetThis >>= (pure . pure . Left)
+                    else pure []
+            )
+            ( do
+                thisiter <- fmap Just (consumeSome sep) <|> (anyWord8 >> return Nothing)
+                case thisiter of
+                    Just x | offsetThis > offsetBegin -> do
+                        offsetAfter <- getOffset
+                        unmatched <- substring offsetBegin offsetThis
+                        fmap ((:) (Left unmatched) . (:) (Right x)) $ go offsetAfter
+                    Just x -> do
+                        offsetAfter <- getOffset
+                        fmap (Right x:) $ go offsetAfter
+                    Nothing -> go offsetBegin
+            )
+
+
+    consumeSome p = do
+        offset1 <- getOffset
+        x <- p
+        offset2 <- getOffset
+        when (offset1 >= offset2) empty
+        return x
+
+-- Extract a substring from part of the buffer that we've already visited.
+--
+-- The idea here is that we go back and run the parser `take` on the buffer
+-- at the Pos which we saved from before, and then we continue from the
+-- current Pos.
+substring :: Int -> Int -> Parser B.ByteString
+substring pos1 pos2 = AT.Parser $ \t pos more lose succes ->
+    let succes' t' pos' more' a =
+            succes t pos more a
+    in AT.runParser (A.take (pos2 - pos1)) t (AT.Pos pos1) more lose succes'
