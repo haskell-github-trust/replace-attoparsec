@@ -324,9 +324,10 @@ sepCap sep = getOffset >>= go
                 -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Internal.html#endOfInput
                 _ <- endOfInput
                 if offsetThis > offsetBegin
-                    -- If we're at the end of the input, then return whatever
-                    -- unmatched string we've got since offsetBegin
-                    then substring offsetBegin offsetThis >>= (pure . pure . Left)
+                    then
+                        -- If we're at the end of the input, then return
+                        -- whatever unmatched string we've got since offsetBegin
+                        substring offsetBegin offsetThis >>= \s -> pure [Left s]
                     else pure []
             )
             ( do

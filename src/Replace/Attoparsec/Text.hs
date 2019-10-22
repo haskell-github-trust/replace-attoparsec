@@ -55,6 +55,7 @@ import Control.Applicative
 import Control.Monad
 import Data.Attoparsec.Text as A
 import qualified Data.Text as T
+import qualified Data.Text.Internal as TI
 import qualified Data.Attoparsec.Internal.Types as AT
 
 -- |
@@ -292,13 +293,37 @@ sepCap sep = getOffset >>= go
     -- Should be equivalent to the unexported function
     -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Text.Internal.html#substring
     --
-    -- I think this 'substring' function may be both slow and broken because it
-    -- uses 'take' instead of the internal 'substring' function.
-    --
     -- This is a performance optimization for gathering the unmatched sections of
     -- the input. The alternative is to accumulate unmatched characters one anyChar
     -- at a time in a list of [Char] and then pack them into a Text.
     substring :: Int -> Int -> Parser T.Text
     substring !pos1 !pos2 = AT.Parser $ \t pos more lose succes ->
         let succes' _t _pos _more a = succes t pos more a
-        in AT.runParser (A.take (pos2 - pos1)) t (AT.Pos pos1) more lose succes'
+        -- At this point I have to explain 'takeCheat'. The alternative to
+        -- running 'takeCheat' here would be the following line:
+        --
+        -- in AT.runParser (A.take (pos2 - pos1)) t (AT.Pos pos1) more lose succes'
+        --
+        -- But 'takeCheat' is both faster and more correct than using
+        -- Attoparsec.take. It is faster because A.take takes a number of
+        -- Chars and then iterates over the Text by the number of Chars,
+        -- advancing by 4 bytes when it encounters a wide Char. So, O(N).
+        -- takeCheat is O(1).
+        -- It is correct because the Pos which we got from 'getOffset' is an
+        -- index into the underlying Data.Text.Array, so (pos2 - pos1) is
+        -- in units of the length of the Data.Text.Array, not in units of the
+        -- number of Chars.
+        --
+        -- This will be fine as long as we always call 'takeCheat' on the
+        -- immutable, already-visited part of the Attoparsec.Text.Buffer's
+        -- Data.Text.Array. Which we do.
+        --
+        -- It's named 'takeCheat' because we're getting access to
+        -- the Attoparsec.Text.Buffer through the Data.Text.Internal
+        -- interface, even though Attoparsec is extremely vigilant about
+        -- not exposing its buffers.
+        in AT.runParser (takeCheat (pos2 - pos1)) t (AT.Pos pos1) more lose succes'
+      where
+        takeCheat len = do
+            (TI.Text arr off _len) <- A.take 1
+            return (TI.Text arr arr len)
