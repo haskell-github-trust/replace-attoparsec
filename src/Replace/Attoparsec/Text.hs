@@ -241,7 +241,7 @@ sepCap sep = getOffset >>= go
     -- offsetBegin is the Pos in the buffer where go starts searching.
     go !offsetBegin = do
         !offsetThis <- getOffset
-        (<|>)
+        choice3
             ( do
                 -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Internal.html#endOfInput
                 _ <- endOfInput
@@ -252,29 +252,23 @@ sepCap sep = getOffset >>= go
                     else pure []
             )
             ( do
-                -- About 'thisiter':
-                -- It looks stupid and introduces a completely unnecessary
-                -- Maybe, but when I refactor to eliminate 'thisiter' and
-                -- the Maybe then the benchmarks get dramatically worse.
-                thisiter <- (<|>)
-                    ( do
-                        x <- sep
-                        !offsetAfter <- getOffset
-                        -- Don't allow a match of a zero-width pattern
-                        when (offsetAfter <= offsetThis) empty
-                        return $ Just (x, offsetAfter)
-                    )
-                    (advance >> return Nothing)
-                case thisiter of
-                    (Just (x, !offsetAfter)) | offsetThis > offsetBegin -> do
-                        -- we've got a match with some preceding unmatched string
-                        unmatched <- substring offsetBegin offsetThis
-                        (Left unmatched:) <$> (Right x:) <$> go offsetAfter
-                    (Just (x, !offsetAfter)) -> do
-                        -- we're got a match with no preceding unmatched string
-                        (Right x:) <$> go offsetAfter
-                    Nothing -> go offsetBegin -- no match, try again
+                x <- sep
+                offsetAfter <- getOffset
+                case () of
+                    -- Don't allow a match of a zero-width pattern
+                  _ | offsetAfter <= offsetThis -> empty
+                    | offsetThis > offsetBegin -> do
+                  -- then we've got a match with some preceding unmatched string
+                      unmatched <- substring offsetBegin offsetThis
+                      (Left unmatched:) <$> (Right x:) <$> go offsetAfter
+                  -- else we've got a match with no preceding unmatched string
+                    | otherwise -> (Right x:) <$> go offsetAfter
+
             )
+            (advance >> go offsetBegin)
+
+    choice3 one two three = one <|> two <|> three
+
     -- Using this advance function instead of 'anyChar' seems to give us
     -- a 5%-20% performance improvement.
     --
