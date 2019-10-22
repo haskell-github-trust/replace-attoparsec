@@ -335,8 +335,8 @@ for details.
 | [`Replace.Megaparsec.streamEdit`][m] `String`     | 454.95ms  | 375.04ms |
 | [`Replace.Megaparsec.streamEdit`][m] `ByteString` | 611.98ms  | 433.26ms |
 | [`Replace.Megaparsec.streamEdit`][m] `Text`       | 592.66ms  | 353.32ms |
-| [`Replace.Attoparsec.ByteString.streamEdit`][ab]  | 537.57ms  | 407.33ms |
-| [`Replace.Attoparsec.Text.streamEdit`][at]        | 549.62ms  | 280.96ms |
+| [`Replace.Attoparsec.ByteString.streamEdit`][ab]  | 394.12ms  | 41.13ms  |
+| [`Replace.Attoparsec.Text.streamEdit`][at]        | 495.49ms  | 38.39ms  |
 | [`Text.Regex.Applicative.replace`][ra] `String`   | 1083.98ms | 646.40ms |
 | [`Text.Regex.PCRE.Heavy.gsub`][ph] `Text`         | ⊥³        | 14.76ms  |
 
