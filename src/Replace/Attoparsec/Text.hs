@@ -292,7 +292,12 @@ streamEditT sep editor input = do
         (Right r) -> fmap mconcat $ traverse (either return editor) r
 {-# INLINABLE streamEditT #-}
 
--- | Get the 'Data.Attoparsec.Text.Parser' ’s current offset position in the stream.
+-- |
+-- Get the 'Data.Attoparsec.Text.Parser' current offset
+-- 'Data.Attoparsec.Internal.Types.Pos' in the stream.
+--
+-- Note that this is not the number of 'Data.Char's which have been consumed,
+-- rather it is an index into the underlying 'Data.Text.Array'.
 --
 -- [“… you know you're in an uncomfortable state of sin :-)” — bos](https://github.com/bos/attoparsec/issues/101)
 getOffset :: Parser Int
