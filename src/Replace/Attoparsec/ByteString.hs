@@ -321,6 +321,7 @@ sepCap sep = getOffset >>= go
         !offsetThis <- getOffset
         (<|>)
             ( do
+                -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Internal.html#endOfInput
                 _ <- endOfInput
                 if offsetThis > offsetBegin
                     -- If we're at the end of the input, then return whatever
@@ -380,5 +381,5 @@ sepCap sep = getOffset >>= go
     -- at a time in a list of [Word8] and then pack them into a ByteString.
     substring :: Int -> Int -> Parser B.ByteString
     substring !pos1 !pos2 = AT.Parser $ \t pos more lose succes ->
-        let succes' _ _ _ a = succes t pos more a
+        let succes' _t _pos _more a = succes t pos more a
         in AT.runParser (A.take (pos2 - pos1)) t (AT.Pos pos1) more lose succes'

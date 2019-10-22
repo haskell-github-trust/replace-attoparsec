@@ -53,7 +53,7 @@ import Data.Functor.Identity
 import Data.Bifunctor
 import Control.Applicative
 import Control.Monad
-import Data.Attoparsec.Text
+import Data.Attoparsec.Text as A
 import qualified Data.Text as T
 import qualified Data.Attoparsec.Internal.Types as AT
 
@@ -92,7 +92,7 @@ import qualified Data.Attoparsec.Internal.Types as AT
 sepCap
     :: Parser a -- ^ The pattern matching parser @sep@
     -> Parser [Either T.Text a]
-sepCap sep = (fmap.fmap) (first T.pack)
+_sepCap sep = (fmap.fmap) (first T.pack)
              $ fmap sequenceLeft
              $ many $ fmap Right (consumeSome sep) <|> fmap Left anyChar
   where
@@ -233,3 +233,74 @@ getOffset :: Parser Int
 getOffset = AT.Parser $ \t pos more _ succ' -> succ' t pos more (AT.fromPos pos)
 {-# INLINABLE getOffset #-}
 
+sepCap sep = getOffset >>= go
+  where
+    -- the go function will search for the first pattern match,
+    -- and then capture the pattern match along with the preceding
+    -- unmatched string, and then recurse.
+    -- offsetBegin is the Pos in the buffer where go starts searching.
+    go !offsetBegin = do
+        !offsetThis <- getOffset
+        (<|>)
+            ( do
+                -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Internal.html#endOfInput
+                _ <- endOfInput
+                if offsetThis > offsetBegin
+                    -- If we're at the end of the input, then return whatever
+                    -- unmatched string we've got since offsetBegin
+                    then substring offsetBegin offsetThis >>= (pure . pure . Left)
+                    else pure []
+            )
+            ( do
+                -- About 'thisiter':
+                -- It looks stupid and introduces a completely unnecessary
+                -- Maybe, but when I refactor to eliminate 'thisiter' and
+                -- the Maybe then the benchmarks get dramatically worse.
+                thisiter <- (<|>)
+                    ( do
+                        x <- sep
+                        !offsetAfter <- getOffset
+                        -- Don't allow a match of a zero-width pattern
+                        when (offsetAfter <= offsetThis) empty
+                        return $ Just (x, offsetAfter)
+                    )
+                    (advance >> return Nothing)
+                case thisiter of
+                    (Just (x, !offsetAfter)) | offsetThis > offsetBegin -> do
+                        -- we've got a match with some preceding unmatched string
+                        unmatched <- substring offsetBegin offsetThis
+                        (Left unmatched:) <$> (Right x:) <$> go offsetAfter
+                    (Just (x, !offsetAfter)) -> do
+                        -- we're got a match with no preceding unmatched string
+                        (Right x:) <$> go offsetAfter
+                    Nothing -> go offsetBegin -- no match, try again
+            )
+    -- Using this advance function instead of 'anyChar' seems to give us
+    -- a 5%-20% performance improvement.
+    --
+    -- It's safe to use 'advance' because after 'advance' we always check
+    -- for 'endOfInput' before trying to read anything from the buffer.
+    --
+    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Text.Internal.html#anyChar
+    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Text.Internal.html#advance
+    -- advance :: Parser ()
+    advance = AT.Parser $ \t pos more _lose succes ->
+        succes t (pos + AT.Pos 1) more ()
+
+    -- Extract a substring from part of the buffer that we've already visited.
+    --
+    -- The idea here is that we go back and run the parser `take` at the Pos
+    -- which we saved from before, and then we continue from the current Pos,
+    -- hopefully without messing up the internal parser state.
+    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Text.Internal.html#take
+    --
+    -- Should be equivalent to the unexported function
+    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Text.Internal.html#substring
+    --
+    -- This is a performance optimization for gathering the unmatched sections of
+    -- the input. The alternative is to accumulate unmatched characters one anyChar
+    -- at a time in a list of [Char] and then pack them into a Text.
+    substring :: Int -> Int -> Parser T.Text
+    substring !pos1 !pos2 = AT.Parser $ \t pos more lose succes ->
+        let succes' _t _pos _more a = succes t pos more a
+        in AT.runParser (A.take (pos2 - pos1)) t (AT.Pos pos1) more lose succes'
