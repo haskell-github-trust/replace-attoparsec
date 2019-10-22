@@ -293,7 +293,7 @@ streamEditT sep editor input = do
 {-# INLINABLE streamEditT #-}
 
 -- |
--- Get the 'Data.Attoparsec.Text.Parser' current offset
+-- Get the 'Data.Attoparsec.Internal.Types.Parser' current offset
 -- 'Data.Attoparsec.Internal.Types.Pos' in the stream.
 --
 -- Note that this is not the number of 'Data.Char's which have been consumed,

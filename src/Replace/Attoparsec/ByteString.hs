@@ -286,7 +286,7 @@ streamEditT sep editor input = do
 {-# INLINABLE streamEditT #-}
 
 -- |
--- Get the 'Data.Attoparsec.Text.Parser' current offset
+-- Get the 'Data.Attoparsec.Internal.Types.Parser' current offset
 -- 'Data.Attoparsec.Internal.Types.Pos' in the stream.
 --
 -- [“… you know you're in an uncomfortable state of sin :-)” — bos](https://github.com/bos/attoparsec/issues/101)
