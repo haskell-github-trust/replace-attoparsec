@@ -297,7 +297,7 @@ streamEditT sep editor input = do
 -- 'Data.Attoparsec.Internal.Types.Pos' in the stream.
 --
 -- Note that this is not the number of 'Data.Char's which have been consumed,
--- rather it is an index into the underlying 'Data.Text.Array'.
+-- rather it is an index into the underlying 'Data.Text.Internal.Array'.
 --
 -- [“… you know you're in an uncomfortable state of sin :-)” — bos](https://github.com/bos/attoparsec/issues/101)
 getOffset :: Parser Int
