@@ -125,21 +125,9 @@ sepCap sep = getOffset >>= go
                     -- else we've got a match with no preceding unmatched string
                   | otherwise -> (Right x:) <$> go offsetAfter
             )
-            (advance >> go offsetBegin)
+            (anyChar >> go offsetBegin)
 
     choice3 one two three = one <|> two <|> three
-
-    -- Using this advance function instead of 'anyChar' seems to give us
-    -- a 5%-20% performance improvement.
-    --
-    -- It's safe to use 'advance' because after 'advance' we always check
-    -- for 'endOfInput' before trying to read anything from the buffer.
-    --
-    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Text.Internal.html#anyChar
-    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Text.Internal.html#advance
-    -- advance :: Parser ()
-    advance = AT.Parser $ \t pos more _lose succes ->
-        succes t (pos + AT.Pos 1) more ()
 
     -- Extract a substring from part of the buffer that we've already visited.
     --
