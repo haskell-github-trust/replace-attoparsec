@@ -245,24 +245,25 @@ sepCap sep = getOffset >>= go
             ( do
                 -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Internal.html#endOfInput
                 _ <- endOfInput
-                if offsetThis > offsetBegin
-                    -- If we're at the end of the input, then return whatever
-                    -- unmatched string we've got since offsetBegin
-                    then substring offsetBegin offsetThis >>= (pure . pure . Left)
-                    else pure []
+                case () of
+                 _| offsetThis > offsetBegin ->
+                    -- If we're at the end of the input, then return
+                    -- whatever unmatched string we've got since offsetBegin
+                    substring offsetBegin offsetThis >>= \s -> pure [Left s]
+                  | otherwise -> pure []
             )
             ( do
                 x <- sep
                 offsetAfter <- getOffset
                 case () of
                     -- Don't allow a match of a zero-width pattern
-                  _ | offsetAfter <= offsetThis -> empty
-                    | offsetThis > offsetBegin -> do
-                  -- then we've got a match with some preceding unmatched string
-                      unmatched <- substring offsetBegin offsetThis
-                      (Left unmatched:) <$> (Right x:) <$> go offsetAfter
-                  -- else we've got a match with no preceding unmatched string
-                    | otherwise -> (Right x:) <$> go offsetAfter
+                 _| offsetAfter <= offsetThis -> empty
+                  | offsetThis > offsetBegin -> do
+                    -- then we've got a match with some preceding unmatched string
+                    unmatched <- substring offsetBegin offsetThis
+                    (Left unmatched:) <$> (Right x:) <$> go offsetAfter
+                    -- else we've got a match with no preceding unmatched string
+                  | otherwise -> (Right x:) <$> go offsetAfter
 
             )
             (advance >> go offsetBegin)
@@ -283,13 +284,16 @@ sepCap sep = getOffset >>= go
 
     -- Extract a substring from part of the buffer that we've already visited.
     --
-    -- The idea here is that we go back and run the parser `take` at the Pos
+    -- The idea here is that we go back and run the parser 'take' at the Pos
     -- which we saved from before, and then we continue from the current Pos,
     -- hopefully without messing up the internal parser state.
     -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Text.Internal.html#take
     --
     -- Should be equivalent to the unexported function
     -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Text.Internal.html#substring
+    --
+    -- I think this 'substring' function may be both slow and broken because it
+    -- uses 'take' instead of the internal 'substring' function.
     --
     -- This is a performance optimization for gathering the unmatched sections of
     -- the input. The alternative is to accumulate unmatched characters one anyChar
