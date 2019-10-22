@@ -19,6 +19,11 @@ A total re-write of the `sepCap` function, guided by
 | [`Replace.Attoparsec.ByteString.streamEdit`][ab]  | 394.12ms  | 41.13ms  |
 | [`Replace.Attoparsec.Text.streamEdit`][at]        | 495.49ms  | 38.39ms  |
 
+[m]: https://hackage.haskell.org/package/replace-megaparsec/docs/Replace-Megaparsec.html#v:streamEdit
+[ab]: https://hackage.haskell.org/package/replace-attoparsec/docs/Replace-Attoparsec-ByteString.html#v:streamEdit
+[at]: https://hackage.haskell.org/package/replace-attoparsec/docs/Replace-Attoparsec-Text.html#v:streamEdit
+
 ## 1.0.0.0 -- 2019-09-10
 
 * First version.
+
