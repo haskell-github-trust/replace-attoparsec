@@ -52,7 +52,6 @@ where
 import Data.Functor.Identity
 import Data.Bifunctor
 import Control.Applicative
-import Control.Monad
 import Data.Attoparsec.Text as A
 import qualified Data.Text as T
 import qualified Data.Text.Internal as TI
@@ -93,25 +92,103 @@ import qualified Data.Attoparsec.Internal.Types as AT
 sepCap
     :: Parser a -- ^ The pattern matching parser @sep@
     -> Parser [Either T.Text a]
-_sepCap sep = (fmap.fmap) (first T.pack)
-             $ fmap sequenceLeft
-             $ many $ fmap Right (consumeSome sep) <|> fmap Left anyChar
+sepCap sep = getOffset >>= go
   where
-    sequenceLeft :: [Either Char r] -> [Either [Char] r]
-    sequenceLeft = foldr consLeft []
+    -- the go function will search for the first pattern match,
+    -- and then capture the pattern match along with the preceding
+    -- unmatched string, and then recurse.
+    -- offsetBegin is the position in the buffer after the last pattern
+    -- match.
+    go !offsetBegin = do
+        !offsetThis <- getOffset
+        choice3
+            ( do
+                -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Internal.html#endOfInput
+                _ <- endOfInput
+                case () of
+                 _| offsetThis > offsetBegin ->
+                    -- If we're at the end of the input, then return
+                    -- whatever unmatched string we've got since offsetBegin
+                    substring offsetBegin offsetThis >>= \s -> pure [Left s]
+                  | otherwise -> pure []
+            )
+            ( do
+                x <- sep
+                offsetAfter <- getOffset
+                case () of
+                    -- Don't allow a match of a zero-width pattern
+                 _| offsetAfter <= offsetThis -> empty
+                  | offsetThis > offsetBegin -> do
+                    -- then we've got a match with some preceding unmatched string
+                    unmatched <- substring offsetBegin offsetThis
+                    (Left unmatched:) <$> (Right x:) <$> go offsetAfter
+                    -- else we've got a match with no preceding unmatched string
+                  | otherwise -> (Right x:) <$> go offsetAfter
+            )
+            (advance >> go offsetBegin)
+
+    choice3 one two three = one <|> two <|> three
+
+    -- Using this advance function instead of 'anyChar' seems to give us
+    -- a 5%-20% performance improvement.
+    --
+    -- It's safe to use 'advance' because after 'advance' we always check
+    -- for 'endOfInput' before trying to read anything from the buffer.
+    --
+    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Text.Internal.html#anyChar
+    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Text.Internal.html#advance
+    -- advance :: Parser ()
+    advance = AT.Parser $ \t pos more _lose succes ->
+        succes t (pos + AT.Pos 1) more ()
+
+    -- Extract a substring from part of the buffer that we've already visited.
+    --
+    -- The idea here is that we go back and run the parser 'take' at the Pos
+    -- which we saved from before, and then we continue from the current Pos,
+    -- hopefully without messing up the internal parser state.
+    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Text.Internal.html#take
+    --
+    -- Should be equivalent to the unexported function
+    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Text.Internal.html#substring
+    --
+    -- This is a performance optimization for gathering the unmatched
+    -- sections of the input. The alternative is to accumulate unmatched
+    -- characters one anyChar at a time in a list of [Char] and then pack
+    -- them into a Text.
+    substring :: Int -> Int -> Parser T.Text
+    substring !pos1 !pos2 = AT.Parser $ \t pos more lose succes ->
+        let succes' _t _pos _more a = succes t pos more a
+        in
+        AT.runParser (takeCheat (pos2 - pos1)) t (AT.Pos pos1) more lose succes'
       where
-        consLeft :: Either l r -> [Either [l] r] -> [Either [l] r]
-        consLeft (Left l) ((Left ls):xs) = {-# SCC consLeft #-} (Left (l:ls)):xs
-        consLeft (Left l) xs = {-# SCC consLeft #-} (Left [l]):xs
-        consLeft (Right r) xs = {-# SCC consLeft #-} (Right r):xs
-    -- If sep succeeds and consumes 0 input tokens, we must force it to fail,
-    -- otherwise infinite loop
-    consumeSome p = {-# SCC consumeSome #-} do
-        offset1 <- getOffset
-        x <- {-# SCC sep #-} p
-        offset2 <- getOffset
-        when (offset1 >= offset2) empty
-        return x
+        -- At this point I have to explain 'takeCheat'. The alternative to
+        -- running 'takeCheat' here would be the following line:
+        --
+        -- AT.runParser (A.take (pos2 - pos1)) t (AT.Pos pos1) more lose succes'
+        --
+        -- But 'takeCheat' is both faster and more correct than using
+        -- Attoparsec.take. It is faster because A.take takes a number of
+        -- Chars and then iterates over the Text by the number of Chars,
+        -- advancing by 4 bytes when it encounters a wide Char. So, O(N).
+        -- takeCheat is O(1).
+        -- It is correct because the Pos which we got from 'getOffset' is an
+        -- index into the underlying Data.Text.Array, so (pos2 - pos1) is
+        -- in units of the length of the Data.Text.Array, not in units of the
+        -- number of Chars.
+        --
+        -- This will be fine as long as we always call 'takeCheat' on the
+        -- immutable, already-visited part of the Attoparsec.Text.Buffer's
+        -- Data.Text.Array. Which we do.
+        --
+        -- It's named 'takeCheat' because we're getting access to
+        -- the Attoparsec.Text.Buffer through the Data.Text.Internal
+        -- interface, even though Attoparsec is extremely vigilant about
+        -- not exposing its buffers.
+        --
+        -- http://hackage.haskell.org/package/text-1.2.3.1/docs/Data-Text-Internal.html
+        takeCheat len = do
+            (TI.Text arr off _len) <- A.take 1
+            return (TI.Text arr off len)
 {-# INLINABLE sepCap #-}
 
 -- |
@@ -234,96 +311,3 @@ getOffset :: Parser Int
 getOffset = AT.Parser $ \t pos more _ succ' -> succ' t pos more (AT.fromPos pos)
 {-# INLINABLE getOffset #-}
 
-sepCap sep = getOffset >>= go
-  where
-    -- the go function will search for the first pattern match,
-    -- and then capture the pattern match along with the preceding
-    -- unmatched string, and then recurse.
-    -- offsetBegin is the Pos in the buffer where go starts searching.
-    go !offsetBegin = do
-        !offsetThis <- getOffset
-        choice3
-            ( do
-                -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Internal.html#endOfInput
-                _ <- endOfInput
-                case () of
-                 _| offsetThis > offsetBegin ->
-                    -- If we're at the end of the input, then return
-                    -- whatever unmatched string we've got since offsetBegin
-                    substring offsetBegin offsetThis >>= \s -> pure [Left s]
-                  | otherwise -> pure []
-            )
-            ( do
-                x <- sep
-                offsetAfter <- getOffset
-                case () of
-                    -- Don't allow a match of a zero-width pattern
-                 _| offsetAfter <= offsetThis -> empty
-                  | offsetThis > offsetBegin -> do
-                    -- then we've got a match with some preceding unmatched string
-                    unmatched <- substring offsetBegin offsetThis
-                    (Left unmatched:) <$> (Right x:) <$> go offsetAfter
-                    -- else we've got a match with no preceding unmatched string
-                  | otherwise -> (Right x:) <$> go offsetAfter
-
-            )
-            (advance >> go offsetBegin)
-
-    choice3 one two three = one <|> two <|> three
-
-    -- Using this advance function instead of 'anyChar' seems to give us
-    -- a 5%-20% performance improvement.
-    --
-    -- It's safe to use 'advance' because after 'advance' we always check
-    -- for 'endOfInput' before trying to read anything from the buffer.
-    --
-    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Text.Internal.html#anyChar
-    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Text.Internal.html#advance
-    -- advance :: Parser ()
-    advance = AT.Parser $ \t pos more _lose succes ->
-        succes t (pos + AT.Pos 1) more ()
-
-    -- Extract a substring from part of the buffer that we've already visited.
-    --
-    -- The idea here is that we go back and run the parser 'take' at the Pos
-    -- which we saved from before, and then we continue from the current Pos,
-    -- hopefully without messing up the internal parser state.
-    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Text.Internal.html#take
-    --
-    -- Should be equivalent to the unexported function
-    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Text.Internal.html#substring
-    --
-    -- This is a performance optimization for gathering the unmatched sections of
-    -- the input. The alternative is to accumulate unmatched characters one anyChar
-    -- at a time in a list of [Char] and then pack them into a Text.
-    substring :: Int -> Int -> Parser T.Text
-    substring !pos1 !pos2 = AT.Parser $ \t pos more lose succes ->
-        let succes' _t _pos _more a = succes t pos more a
-        -- At this point I have to explain 'takeCheat'. The alternative to
-        -- running 'takeCheat' here would be the following line:
-        --
-        -- in AT.runParser (A.take (pos2 - pos1)) t (AT.Pos pos1) more lose succes'
-        --
-        -- But 'takeCheat' is both faster and more correct than using
-        -- Attoparsec.take. It is faster because A.take takes a number of
-        -- Chars and then iterates over the Text by the number of Chars,
-        -- advancing by 4 bytes when it encounters a wide Char. So, O(N).
-        -- takeCheat is O(1).
-        -- It is correct because the Pos which we got from 'getOffset' is an
-        -- index into the underlying Data.Text.Array, so (pos2 - pos1) is
-        -- in units of the length of the Data.Text.Array, not in units of the
-        -- number of Chars.
-        --
-        -- This will be fine as long as we always call 'takeCheat' on the
-        -- immutable, already-visited part of the Attoparsec.Text.Buffer's
-        -- Data.Text.Array. Which we do.
-        --
-        -- It's named 'takeCheat' because we're getting access to
-        -- the Attoparsec.Text.Buffer through the Data.Text.Internal
-        -- interface, even though Attoparsec is extremely vigilant about
-        -- not exposing its buffers.
-        in AT.runParser (takeCheat (pos2 - pos1)) t (AT.Pos pos1) more lose succes'
-      where
-        takeCheat len = do
-            (TI.Text arr off _len) <- A.take 1
-            return (TI.Text arr arr len)

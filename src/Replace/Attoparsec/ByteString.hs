@@ -54,10 +54,8 @@ import Data.Bifunctor
 import Control.Applicative
 import Control.Monad
 import Data.Attoparsec.ByteString as A
-import GHC.Word
 import qualified Data.ByteString as B
 import qualified Data.Attoparsec.Internal.Types as AT
--- import qualified Data.Attoparsec.ByteString.Internal as AI
 
 -- |
 -- == Separate and capture
@@ -94,29 +92,81 @@ import qualified Data.Attoparsec.Internal.Types as AT
 sepCap
     :: Parser a -- ^ The pattern matching parser @sep@
     -> Parser [Either B.ByteString a]
-_sepCap sep = (fmap.fmap) (first B.pack)
-             $ fmap sequenceLeft
-             $ many $ fmap Right (consumeSome sep) <|> fmap Left anyWord8
-             -- TODO We might consider accumulating a Builder for Left instead
-             -- of returning a list of Word8.
-             -- Would expect faster for sparse patterns, slower for dense
-             -- patterns.
+sepCap sep = getOffset >>= go
   where
-    sequenceLeft :: [Either Word8 r] -> [Either [Word8] r]
-    sequenceLeft = foldr consLeft []
-      where
-        consLeft :: Either l r -> [Either [l] r] -> [Either [l] r]
-        consLeft (Left l) ((Left ls):xs) = (Left (l:ls)):xs
-        consLeft (Left l) xs = (Left [l]):xs
-        consLeft (Right r) xs = (Right r):xs
-    -- If sep succeeds and consumes 0 input tokens, we must force it to fail,
-    -- otherwise infinite loop
-    consumeSome p = do
-        offset1 <- getOffset
-        x <- p
-        offset2 <- getOffset
-        when (offset1 >= offset2) empty
-        return x
+    -- the go function will search for the first pattern match,
+    -- and then capture the pattern match along with the preceding
+    -- unmatched string, and then recurse.
+    -- offsetBegin is the position in the buffer after the last pattern
+    -- match.
+    go !offsetBegin = do
+        !offsetThis <- getOffset
+        (<|>)
+            ( do
+                -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Internal.html#endOfInput
+                _ <- endOfInput
+                if offsetThis > offsetBegin
+                    then
+                        -- If we're at the end of the input, then return
+                        -- whatever unmatched string we've got since offsetBegin
+                        substring offsetBegin offsetThis >>= \s -> pure [Left s]
+                    else pure []
+            )
+            ( do
+                -- About 'thisiter':
+                -- It looks stupid and introduces a completely unnecessary
+                -- Maybe, but when I refactor to eliminate 'thisiter' and
+                -- the Maybe then the benchmarks get dramatically worse.
+                thisiter <- (<|>)
+                    ( do
+                        x <- sep
+                        !offsetAfter <- getOffset
+                        -- Don't allow a match of a zero-width pattern
+                        when (offsetAfter <= offsetThis) empty
+                        return $ Just (x, offsetAfter)
+                    )
+                    (advance >> return Nothing)
+                case thisiter of
+                    (Just (x, !offsetAfter)) | offsetThis > offsetBegin -> do
+                        -- we've got a match with some preceding unmatched string
+                        unmatched <- substring offsetBegin offsetThis
+                        (Left unmatched:) <$> (Right x:) <$> go offsetAfter
+                    (Just (x, !offsetAfter)) -> do
+                        -- we're got a match with no preceding unmatched string
+                        (Right x:) <$> go offsetAfter
+                    Nothing -> go offsetBegin -- no match, try again
+            )
+    -- Using this advance function instead of 'anyWord8' seems to give us
+    -- a 5%-20% performance improvement.
+    --
+    -- It's safe to use 'advance' because after 'advance' we always check
+    -- for 'endOfInput' before trying to read anything from the buffer.
+    --
+    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.ByteString.Internal.html#anyWord8
+    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.ByteString.Internal.html#advance
+    -- advance :: Parser ()
+    advance = AT.Parser $ \t pos more _lose succes ->
+        succes t (pos + AT.Pos 1) more ()
+
+    -- Extract a substring from part of the buffer that we've already visited.
+    -- Does not check bounds.
+    --
+    -- The idea here is that we go back and run the parser 'take' at the Pos
+    -- which we saved from before, and then we continue from the current Pos,
+    -- hopefully without messing up the internal parser state.
+    --
+    -- Should be equivalent to the unexported function
+    -- Data.Attoparsec.ByteString.Buffer.substring
+    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.ByteString.Buffer.html#substring
+    --
+    -- This is a performance optimization for gathering the unmatched
+    -- sections of the input. The alternative is to accumulate unmatched
+    -- characters one anyWord8 at a time in a list of [Word8] and then pack
+    -- them into a ByteString.
+    substring :: Int -> Int -> Parser B.ByteString
+    substring !pos1 !pos2 = AT.Parser $ \t pos more lose succes ->
+        let succes' _t _pos _more a = succes t pos more a
+        in AT.runParser (A.take (pos2 - pos1)) t (AT.Pos pos1) more lose succes'
 {-# INLINABLE sepCap #-}
 
 -- |
@@ -241,146 +291,3 @@ streamEditT sep editor input = do
 getOffset :: Parser Int
 getOffset = AT.Parser $ \t pos more _ succ' -> succ' t pos more (AT.fromPos pos)
 
-
-
--- Zero-width matches are allowed.
-_splitPattern
-    :: (B.ByteString -> Maybe Int)
-    -> B.ByteString
-    -> Maybe (B.ByteString, B.ByteString, B.ByteString)
-_splitPattern pat input = go 0
-  where
-    inputLen = B.length input
-    go indx
-        | indx == inputLen = Nothing
-        | otherwise =
-            let (before, tale) = B.splitAt indx input
-            in
-            case pat tale of
-                Nothing -> go $ indx + 1
-                Just patLen ->
-                    -- The pat may say it wants more than is available
-                    let takeLen = min patLen $ inputLen - indx
-                        (patmatch, after) = B.splitAt takeLen tale
-                    in Just (before, patmatch, after)
-
-_streamEditT sep editor input = fmap mconcat $ sequence $ tryCap input 0
-  where
-    measurePattern = do
-        x <- sep
-        off <- getOffset
-        pure (x, off)
-    -- measurePattern = (,) <$> sep <*> getOffset
-
-    -- tryCap :: B.ByteString -> Int -> [m ByteString]
-    tryCap tale indx
-        | B.length tale == 0 = []
-        | indx >= B.length tale = [pure tale]
-        | otherwise =
-            let (before, notBefore) = B.splitAt indx tale
-            in
-            case parseOnly measurePattern notBefore of
-                (Left _) -> tryCap tale (indx + 1)
-                (Right (_,0)) -> tryCap tale (indx + 1) --Zero-width matches not allowed
-                (Right (x,patLen)) ->
-                    let (_, after) = B.splitAt patLen notBefore
-                    in
-                    if indx==0
-                        then (editor x):tryCap after 0
-                        else (pure before):(editor x):tryCap after 0
-
-
--- Problems:
--- If I just re-write sepCap like this, then
--- 1. getOffset and all the megaparsec line number magic won't work in
---    sepCap anymore.
-
--- See http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.ByteString.Internal.html#substring
-
--- splitter :: Parser a -> Parser (ByteString, Maybe a)
--- splitter sep = AT.Parser $ \t pos more lose succ ->
---     --let initPos = pos
---     -- in go
---     go pos more lose succ
---   where
---     go t' pos' more' lose' =
---         case AT.runParser sep t' pos' more' AI.failK AI.successK of
---             Fail _ _ _     -> AI.advance 1 >> AT.Parser go
---             Done _ a       -> succ t' pos' more' (substring pos (pos' - pos), a)
---             Partial contin -> error "what about partial?"
-
-
-
-sepCap sep = getOffset >>= go
-  where
-    -- the go function will search for the first pattern match,
-    -- and then capture the pattern match along with the preceding
-    -- unmatched string, and then recurse.
-    -- offsetBegin is the Pos in the buffer where go starts searching.
-    go !offsetBegin = do
-        !offsetThis <- getOffset
-        (<|>)
-            ( do
-                -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Internal.html#endOfInput
-                _ <- endOfInput
-                if offsetThis > offsetBegin
-                    then
-                        -- If we're at the end of the input, then return
-                        -- whatever unmatched string we've got since offsetBegin
-                        substring offsetBegin offsetThis >>= \s -> pure [Left s]
-                    else pure []
-            )
-            ( do
-                -- About 'thisiter':
-                -- It looks stupid and introduces a completely unnecessary
-                -- Maybe, but when I refactor to eliminate 'thisiter' and
-                -- the Maybe then the benchmarks get dramatically worse.
-                thisiter <- (<|>)
-                    ( do
-                        x <- sep
-                        !offsetAfter <- getOffset
-                        -- Don't allow a match of a zero-width pattern
-                        when (offsetAfter <= offsetThis) empty
-                        return $ Just (x, offsetAfter)
-                    )
-                    (advance >> return Nothing)
-                case thisiter of
-                    (Just (x, !offsetAfter)) | offsetThis > offsetBegin -> do
-                        -- we've got a match with some preceding unmatched string
-                        unmatched <- substring offsetBegin offsetThis
-                        (Left unmatched:) <$> (Right x:) <$> go offsetAfter
-                    (Just (x, !offsetAfter)) -> do
-                        -- we're got a match with no preceding unmatched string
-                        (Right x:) <$> go offsetAfter
-                    Nothing -> go offsetBegin -- no match, try again
-            )
-    -- Using this advance function instead of 'anyWord8' seems to give us
-    -- a 5%-20% performance improvement.
-    --
-    -- It's safe to use 'advance' because after 'advance' we always check
-    -- for 'endOfInput' before trying to read anything from the buffer.
-    --
-    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.ByteString.Internal.html#anyWord8
-    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.ByteString.Internal.html#advance
-    -- advance :: Parser ()
-    advance = AT.Parser $ \t pos more _lose succes ->
-        succes t (pos + AT.Pos 1) more ()
-
-    -- Extract a substring from part of the buffer that we've already visited.
-    -- Does not check bounds.
-    --
-    -- The idea here is that we go back and run the parser `take` at the Pos
-    -- which we saved from before, and then we continue from the current Pos,
-    -- hopefully without messing up the internal parser state.
-    --
-    -- Should be equivalent to the unexported function
-    -- Data.Attoparsec.ByteString.Buffer.substring
-    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.ByteString.Buffer.html#substring
-    --
-    -- This is a performance optimization for gathering the unmatched sections of
-    -- the input. The alternative is to accumulate unmatched characters one anyWord8
-    -- at a time in a list of [Word8] and then pack them into a ByteString.
-    substring :: Int -> Int -> Parser B.ByteString
-    substring !pos1 !pos2 = AT.Parser $ \t pos more lose succes ->
-        let succes' _t _pos _more a = succes t pos more a
-        in AT.runParser (A.take (pos2 - pos1)) t (AT.Pos pos1) more lose succes'
