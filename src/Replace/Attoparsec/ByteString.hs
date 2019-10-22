@@ -329,6 +329,10 @@ sepCap sep = getOffset >>= go
                     else pure []
             )
             ( do
+                -- About 'thisiter':
+                -- It looks stupid and introduces a completely unnecessary
+                -- Maybe, but when I refactor to eliminate 'thisiter' and
+                -- the Maybe then the benchmarks get dramatically worse.
                 thisiter <- (<|>)
                     ( do
                         x <- sep
@@ -337,7 +341,7 @@ sepCap sep = getOffset >>= go
                         when (offsetAfter <= offsetThis) empty
                         return $ Just (x, offsetAfter)
                     )
-                    (anyWord8 >> return Nothing)
+                    (advance >> return Nothing)
                 case thisiter of
                     (Just (x, !offsetAfter)) | offsetThis > offsetBegin -> do
                         -- we've got a match with some preceding unmatched string
@@ -348,23 +352,33 @@ sepCap sep = getOffset >>= go
                         (Right x:) <$> go offsetAfter
                     Nothing -> go offsetBegin -- no match, try again
             )
+    -- Using this advance function instead of 'anyWord8' seems to give us
+    -- a 5%-20% performance improvement.
+    --
+    -- It's safe to use 'advance' because after 'advance' we always check
+    -- for 'endOfInput' before trying to read anything from the buffer.
+    --
+    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.ByteString.Internal.html#anyWord8
+    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.ByteString.Internal.html#advance
+    -- advance :: Parser ()
+    advance = AT.Parser $ \t pos more _lose succes ->
+        succes t (pos + AT.Pos 1) more ()
 
-
--- Extract a substring from part of the buffer that we've already visited.
--- Does not check bounds.
---
--- The idea here is that we go back and run the parser `take` at the Pos
--- which we saved from before, and then we continue from the current Pos,
--- hopefully without messing up the internal parser state.
---
--- Should be equivalent to the unexported function
--- Data.Attoparsec.ByteString.Buffer.substring
--- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.ByteString.Buffer.html#substring
---
--- This is a performance optimization for gathering the unmatched sections of
--- the input. The alternative is to accumulate unmatched characters one anyWord8
--- at a time in a list of [Word8] and then pack them into a ByteString.
-substring :: Int -> Int -> Parser B.ByteString
-substring !pos1 !pos2 = AT.Parser $ \t pos more lose succes ->
-    let succes' _ _ _ a = succes t pos more a
-    in AT.runParser (A.take (pos2 - pos1)) t (AT.Pos pos1) more lose succes'
+    -- Extract a substring from part of the buffer that we've already visited.
+    -- Does not check bounds.
+    --
+    -- The idea here is that we go back and run the parser `take` at the Pos
+    -- which we saved from before, and then we continue from the current Pos,
+    -- hopefully without messing up the internal parser state.
+    --
+    -- Should be equivalent to the unexported function
+    -- Data.Attoparsec.ByteString.Buffer.substring
+    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.ByteString.Buffer.html#substring
+    --
+    -- This is a performance optimization for gathering the unmatched sections of
+    -- the input. The alternative is to accumulate unmatched characters one anyWord8
+    -- at a time in a list of [Word8] and then pack them into a ByteString.
+    substring :: Int -> Int -> Parser B.ByteString
+    substring !pos1 !pos2 = AT.Parser $ \t pos more lose succes ->
+        let succes' _ _ _ a = succes t pos more a
+        in AT.runParser (A.take (pos2 - pos1)) t (AT.Pos pos1) more lose succes'
