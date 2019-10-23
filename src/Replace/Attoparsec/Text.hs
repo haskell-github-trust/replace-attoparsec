@@ -144,25 +144,26 @@ sepCap sep = getOffset >>= go
     -- characters one anyChar at a time in a list of [Char] and then pack
     -- them into a Text.
     substring :: Int -> Int -> Parser T.Text
-    substring !pos1 !pos2 = AT.Parser $ \t pos more lose succes ->
+    substring !bgn !end = AT.Parser $ \t pos more lose succes ->
         let succes' _t _pos _more a = succes t pos more a
         in
-        AT.runParser (takeCheat (pos2 - pos1)) t (AT.Pos pos1) more lose succes'
+        AT.runParser (takeCheat (end - bgn)) t (AT.Pos bgn) more lose succes'
       where
-        -- At this point I have to explain 'takeCheat'. The alternative to
-        -- running 'takeCheat' here would be the following line:
+        -- Dear reader, you deserve an explanation for 'takeCheat'. The
+        -- alternative to running 'takeCheat' here would be the following line:
         --
-        -- AT.runParser (A.take (pos2 - pos1)) t (AT.Pos pos1) more lose succes'
+        -- AT.runParser (A.take (end - bgn)) t (AT.Pos bgn) more lose succes'
         --
-        -- But 'takeCheat' is both faster and more correct than using
-        -- Attoparsec.take. It is faster because A.take takes a number of
-        -- Chars and then iterates over the Text by the number of Chars,
-        -- advancing by 4 bytes when it encounters a wide Char. So, O(N).
-        -- takeCheat is O(1).
+        -- But 'Attoparsec.take' is not correct, and 'takeCheat' is correct.
         -- It is correct because the Pos which we got from 'getOffset' is an
-        -- index into the underlying Data.Text.Array, so (pos2 - pos1) is
+        -- index into the underlying Data.Text.Array, so (end - bgn) is
         -- in units of the length of the Data.Text.Array, not in units of the
         -- number of Chars.
+        --
+        -- Furthermore 'takeCheat' is a lot faster because 'A.take' takes a
+        -- number of Chars and then iterates over the Text by the number
+        -- of Chars, advancing by 4 bytes when it encounters a wide Char.
+        -- So, O(N). takeCheat is O(1).
         --
         -- This will be fine as long as we always call 'takeCheat' on the
         -- immutable, already-visited part of the Attoparsec.Text.Buffer's
@@ -174,6 +175,7 @@ sepCap sep = getOffset >>= go
         -- not exposing its buffers.
         --
         -- http://hackage.haskell.org/package/text-1.2.3.1/docs/Data-Text-Internal.html
+        -- takeCheat :: Int -> Parser T.Text
         takeCheat len = do
             (TI.Text arr off _len) <- A.take 1
             return (TI.Text arr off len)
