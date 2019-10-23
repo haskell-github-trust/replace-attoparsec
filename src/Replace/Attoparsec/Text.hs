@@ -52,6 +52,7 @@ where
 import Data.Functor.Identity
 import Data.Bifunctor
 import Control.Applicative
+import Control.Monad
 import Data.Attoparsec.Text as A
 import qualified Data.Text as T
 import qualified Data.Text.Internal as TI
@@ -101,45 +102,41 @@ sepCap sep = getOffset >>= go
     -- match.
     go !offsetBegin = do
         !offsetThis <- getOffset
-        choice3
+        (<|>)
             ( do
                 -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Internal.html#endOfInput
                 _ <- endOfInput
-                case () of
-                 _| offsetThis > offsetBegin ->
-                    -- If we're at the end of the input, then return
-                    -- whatever unmatched string we've got since offsetBegin
-                    substring offsetBegin offsetThis >>= \s -> pure [Left s]
-                  | otherwise -> pure []
+                if offsetThis > offsetBegin
+                    then
+                        -- If we're at the end of the input, then return
+                        -- whatever unmatched string we've got since offsetBegin
+                        substring offsetBegin offsetThis >>= \s -> pure [Left s]
+                    else pure []
             )
             ( do
-                x <- sep
-                offsetAfter <- getOffset
-                case () of
-                    -- Don't allow a match of a zero-width pattern
-                 _| offsetAfter <= offsetThis -> empty
-                  | offsetThis > offsetBegin -> do
-                    -- then we've got a match with some preceding unmatched string
-                    unmatched <- substring offsetBegin offsetThis
-                    (Left unmatched:) <$> (Right x:) <$> go offsetAfter
-                    -- else we've got a match with no preceding unmatched string
-                  | otherwise -> (Right x:) <$> go offsetAfter
+                -- About 'thisiter':
+                -- It looks stupid and introduces a completely unnecessary
+                -- Maybe, but when I refactor to eliminate 'thisiter' and
+                -- the Maybe then the benchmarks get dramatically worse.
+                thisiter <- (<|>)
+                    ( do
+                        x <- sep
+                        !offsetAfter <- getOffset
+                        -- Don't allow a match of a zero-width pattern
+                        when (offsetAfter <= offsetThis) empty
+                        return $ Just (x, offsetAfter)
+                    )
+                    (anyChar >> return Nothing)
+                case thisiter of
+                    (Just (x, !offsetAfter)) | offsetThis > offsetBegin -> do
+                        -- we've got a match with some preceding unmatched string
+                        unmatched <- substring offsetBegin offsetThis
+                        (Left unmatched:) <$> (Right x:) <$> go offsetAfter
+                    (Just (x, !offsetAfter)) -> do
+                        -- we're got a match with no preceding unmatched string
+                        (Right x:) <$> go offsetAfter
+                    Nothing -> go offsetBegin -- no match, try again
             )
-            (advance >> go offsetBegin)
-
-    choice3 one two three = one <|> two <|> three
-
-    -- Using this advance function instead of 'anyChar' seems to give us
-    -- a 5%-20% performance improvement.
-    --
-    -- It's safe to use 'advance' because after 'advance' we always check
-    -- for 'endOfInput' before trying to read anything from the buffer.
-    --
-    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Text.Internal.html#anyChar
-    -- http://hackage.haskell.org/package/attoparsec-0.13.2.3/docs/src/Data.Attoparsec.Text.Internal.html#advance
-    -- advance :: Parser ()
-    advance = AT.Parser $ \t pos more _lose succes ->
-        succes t (pos + AT.Pos 1) more ()
 
     -- Extract a substring from part of the buffer that we've already visited.
     --
