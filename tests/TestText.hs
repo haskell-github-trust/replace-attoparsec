@@ -39,10 +39,18 @@ tests = return
         (sepCap (return (read "a" :: Int) :: Parser Int))
         ("a")
         ([Left "a"])
+    , Test $ runParserTest "findAll astral"
+        (findAll ((A.takeWhile (=='𝅘𝅥𝅯') :: Parser T.Text)))
+        ("𝄞𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥" :: T.Text)
+        [Left "𝄞𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥", Right "𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅯", Left "𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥"]
     , Test $ runParserFeed "const string"
         (sepCap (string "aa"))
         (" a") ("a ")
         ([Left " ",Right"aa",Left" "])
+    , Test $ runParserFeed "findAll astral"
+        (findAll ((A.takeWhile (=='𝅘𝅥𝅯') :: Parser T.Text)))
+        ("𝄞𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥𝅯𝅘𝅥𝅯") ("𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥" :: T.Text)
+        [Left "𝄞𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥", Right "𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅯", Left "𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥"]
     , Test $ streamEditTest "x to o" (string "x") (const "o") "x x x" "o o o"
     , Test $ streamEditTest "x to o inner" (string "x") (const "o") " x x x " " o o o "
     , Test $ streamEditTest "ordering" (string "456") (const "ABC") "123456789" "123ABC789"
