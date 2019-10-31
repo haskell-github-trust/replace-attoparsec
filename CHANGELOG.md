@@ -1,27 +1,25 @@
 # Revision history for replace-attoparsec
 
-## 1.0.4.0 -- 2019-10-22
+## 1.2.0.0 -- 2019-10-31
 
-A total re-write of the `sepCap` function, guided by
+Benchmark improvements
+
+Specializations of the `sepCap` function, guided by
 [replace-benchmark](https://github.com/jamesdbrock/replace-benchmark).
 
-#### Before
+### New benchmarks
 
 | Program                                           | dense     | sparse   |
 | :---                                              |      ---: |     ---: |
-| [`Replace.Attoparsec.ByteString.streamEdit`][ab]  | 537.57ms  | 407.33ms |
-| [`Replace.Attoparsec.Text.streamEdit`][at]        | 549.62ms  | 280.96ms |
+| `Replace.Attoparsec.ByteString.streamEdit`        | 394.12ms  | 41.13ms  |
+| `Replace.Attoparsec.Text.streamEdit`              | 515.26ms  | 46.10ms  |
 
-#### After
+### Old benchmarks
 
 | Program                                           | dense     | sparse   |
 | :---                                              |      ---: |     ---: |
-| [`Replace.Attoparsec.ByteString.streamEdit`][ab]  | 394.12ms  | 41.13ms  |
-| [`Replace.Attoparsec.Text.streamEdit`][at]        | 495.49ms  | 38.39ms  |
-
-[m]: https://hackage.haskell.org/package/replace-megaparsec/docs/Replace-Megaparsec.html#v:streamEdit
-[ab]: https://hackage.haskell.org/package/replace-attoparsec/docs/Replace-Attoparsec-ByteString.html#v:streamEdit
-[at]: https://hackage.haskell.org/package/replace-attoparsec/docs/Replace-Attoparsec-Text.html#v:streamEdit
+|  `Replace.Attoparsec.ByteString.streamEdit`       | 537.57ms  | 407.33ms |
+|  `Replace.Attoparsec.Text.streamEdit`             | 549.62ms  | 280.96ms |
 
 ## 1.0.0.0 -- 2019-09-10
 

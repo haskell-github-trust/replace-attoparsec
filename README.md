@@ -38,8 +38,7 @@ or
 See [__replace-megaparsec__](https://hackage.haskell.org/package/replace-megaparsec)
 for the
 [__megaparsec__](http://hackage.haskell.org/package/megaparsec)
-version. ([__megaparsec__ is as fast as __attoparsec__.](https://github.com/mrkkrp/megaparsec#performance))
-
+version.
 
 ## Why would we want to do pattern matching and substitution with parsers instead of regular expressions?
 
@@ -302,6 +301,13 @@ Some libraries that one might consider instead of this one.
 
 # Benchmarks
 
+These benchmarks are intended to measure the wall-clock speed
+of *everything except the actual pattern-matching*. Speed of the
+pattern-matching is the responsibility of the
+[__megaparsec__](http://hackage.haskell.org/package/megaparsec) and
+[__attoparsec__](http://hackage.haskell.org/package/attoparsec)
+libraries.
+
 The benchmark task is to find all of the one-character patterns `x` in a
 text stream and replace them by a function which returns the constant
 string `oo`. So, like the regex `s/x/oo/g`.
@@ -323,7 +329,8 @@ like
 ```
 
 Each benchmark program reads the input from `stdin`, replaces `x` with `oo`,
-and writes the result to `stdout`. The time elapsed is measured by `perf stat`.
+and writes the result to `stdout`. The time elapsed is measured by `perf stat`,
+and the best observed time is recorded.
 
 See [replace-benchmark](https://github.com/jamesdbrock/replace-benchmark)
 for details.
@@ -333,10 +340,10 @@ for details.
 | Python `re.sub`¹                                  | 89.23ms   | 23.98ms  |
 | Perl `s///ge`²                                    | 180.65ms  | 5.60ms   |
 | [`Replace.Megaparsec.streamEdit`][m] `String`     | 454.95ms  | 375.04ms |
-| [`Replace.Megaparsec.streamEdit`][m] `ByteString` | 611.98ms  | 433.26ms |
-| [`Replace.Megaparsec.streamEdit`][m] `Text`       | 592.66ms  | 353.32ms |
+| [`Replace.Megaparsec.streamEdit`][m] `ByteString` | 529.99ms  | 73.76ms  |
+| [`Replace.Megaparsec.streamEdit`][m] `Text`       | 547.47ms  | 139.21ms |
 | [`Replace.Attoparsec.ByteString.streamEdit`][ab]  | 394.12ms  | 41.13ms  |
-| [`Replace.Attoparsec.Text.streamEdit`][at]        | 516.50ms  | 47.06ms  |
+| [`Replace.Attoparsec.Text.streamEdit`][at]        | 515.26ms  | 46.10ms  |
 | [`Text.Regex.Applicative.replace`][ra] `String`   | 1083.98ms | 646.40ms |
 | [`Text.Regex.PCRE.Heavy.gsub`][ph] `Text`         | ⊥³        | 14.76ms  |
 
