@@ -43,9 +43,6 @@ module Replace.Attoparsec.Text
     -- * Running parser
   , streamEdit
   , streamEditT
-
-    -- * Parser
-  , getOffset
   )
 where
 

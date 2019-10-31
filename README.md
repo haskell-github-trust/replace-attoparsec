@@ -137,21 +137,6 @@ fromRight [] $ parseOnly (findAllCap hexparser) "0xA 000 0xFFFF"
 [Right ("0xA",10),Left " 000 ",Right ("0xFFFF",65535)]
 ```
 
-### Pattern match, capture only the locations of the matched patterns
-
-Find all of the sections of the stream which match
-a string of whitespace.
-Print a list of the offsets of the beginning of every pattern match.
-
-```haskell
-import Data.Either
-let spaceoffset = getOffset <* some space :: Parser Int
-fromRight [] $ parseOnly (return . rights =<< sepCap spaceoffset) " a  b  "
-```
-```haskell
-[0,2,5]
-```
-
 ### Pattern match balanced parentheses
 
 Find groups of balanced nested parentheses. This is an example of a

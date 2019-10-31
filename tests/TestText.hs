@@ -27,10 +27,6 @@ tests = return
         (sepCap scinum)
         ("1E3")
         ([Right (1,3)])
-    , Test $ runParserTest "getOffset"
-        (sepCap offsetA)
-        ("xxAxx")
-        ([Left "xx", Right 2, Left "xx"])
     , Test $ runParserTest "monad fail"
         (sepCap (fail "" :: Parser ()))
         ("xxx")
@@ -113,7 +109,4 @@ tests = return
         e <- decimal
         return (m, e)
 
-
-    offsetA :: Parser Int
-    offsetA = getOffset <* string "A"
 

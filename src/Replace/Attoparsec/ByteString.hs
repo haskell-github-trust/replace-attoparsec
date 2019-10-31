@@ -43,9 +43,6 @@ module Replace.Attoparsec.ByteString
     -- * Running parser
   , streamEdit
   , streamEditT
-
-    -- * Parser
-  , getOffset
   )
 where
 
