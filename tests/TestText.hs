@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
 
 module TestText ( tests ) where
 
@@ -10,6 +11,7 @@ import Data.Attoparsec.Text as A
 import qualified Data.Text as T
 import Text.Parser.Char (upper)
 import Control.Applicative
+import Data.Monoid
 
 tests :: IO [Test]
 tests = return
@@ -31,10 +33,12 @@ tests = return
         (sepCap (fail "" :: Parser ()))
         ("xxx")
         ([Left "xxx"])
+#if MIN_VERSION_GLASGOW_HASKELL(8,6,0,0)
     , Test $ runParserTest "read fail"
         (sepCap (return (read "a" :: Int) :: Parser Int))
         ("a")
         ([Left "a"])
+#endif
     , Test $ runParserTest "findAll astral"
         (findAll ((A.takeWhile (=='𝅘𝅥𝅯') :: Parser T.Text)))
         ("𝄞𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥" :: T.Text)

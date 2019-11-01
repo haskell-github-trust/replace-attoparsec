@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PackageImports #-}
+{-# LANGUAGE CPP #-}
 
 module TestByteString ( tests ) where
 
@@ -11,7 +12,7 @@ import Data.ByteString.Internal (c2w)
 import "parsers" Text.Parser.Token
 import Replace.Attoparsec.ByteString
 import Control.Applicative
-
+import Data.Monoid
 
 tests :: IO [Test]
 tests = return
@@ -33,10 +34,12 @@ tests = return
         (sepCap (fail "" :: Parser ()))
         ("xxx")
         ([Left "xxx"])
+#if MIN_VERSION_GLASGOW_HASKELL(8,6,0,0)
     , Test $ runParserTest "read fail"
         (sepCap (return (read "a" :: Int) :: Parser Int))
         ("a")
         ([Left "a"])
+#endif
     , Test $ runParserFeed "const string"
         (sepCap (string "aa"))
         (" a") ("a ")
