@@ -247,8 +247,8 @@ findAll sep = (fmap.fmap) (second fst) $ sepCap (match sep)
 --
 -- This allows us to write an @editor@ function which can choose to not
 -- edit the match and just leave it as it is. If the @editor@ function
--- always returns the first item in the tuple, then @streamEdit@ changes
--- nothing.
+-- returns the first item in the tuple, then @streamEdit@ will not change
+-- the matched string.
 --
 -- So, for all @sep@:
 --
