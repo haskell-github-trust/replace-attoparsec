@@ -12,7 +12,6 @@ import Data.ByteString.Internal (c2w)
 import "parsers" Text.Parser.Token
 import Replace.Attoparsec.ByteString
 import Control.Applicative
-import Data.Monoid
 
 tests :: IO [Test]
 tests = return
@@ -44,10 +43,13 @@ tests = return
         (sepCap (string "aa"))
         (" a") ("a ")
         ([Left " ",Right"aa",Left" "])
+    , Test $ runParserTest "empty input" (sepCap (fail "" :: Parser ())) "" []
     , Test $ streamEditTest "x to o" (string "x") (const "o") "x x x" "o o o"
     , Test $ streamEditTest "x to o inner" (string "x") (const "o") " x x x " " o o o "
     , Test $ streamEditTest "ordering" (string "456") (const "ABC") "123456789" "123ABC789"
+    , Test $ streamEditTest "empty input" (match (fail "")) (fst) "" ""
     ]
+
   where
     runParserTest nam p input expected = TestInstance
             { run = do

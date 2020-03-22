@@ -58,34 +58,45 @@ import qualified Data.Attoparsec.Internal.Types as AT
 -- == Separate and capture
 --
 -- Parser combinator to find all of the non-overlapping ocurrences
--- of the pattern @sep@ in a text stream. Separate the stream into sections:
+-- of the pattern @sep@ in a text stream.
+-- The 'sepCap' parser will always consume its entire input and can never fail.
 --
--- * sections which can parsed by the pattern @sep@ will be captured as
---   matching sections in 'Right'
--- * non-matching sections of the stream will be captured in 'Left'.
+-- === Output
 --
--- This parser will always consume its entire input and can never fail.
--- If there are no pattern matches, then the entire input stream will be
--- returned as a non-matching 'Left' section.
+-- The input stream is separated and output int a list of sections:
 --
--- The pattern matching parser @sep@ will not be allowed to succeed without
--- consuming any input. If we allow the parser to match a zero-width pattern,
+-- * Sections which can parsed by the pattern @sep@ will be parsed and captured
+--   as 'Right'
+-- * Non-matching sections of the stream will be captured in 'Left'.
+--
+-- The output list also has these properties:
+--
+-- * If the input is @""@ then the output list will be @[]@.
+-- * If there are no pattern matches, then
+--   the entire input stream will be returned as one non-matching 'Left' section.
+-- * The output list will not contain two consecutive 'Left' sections.
+--
+-- === Zero-width matches forbidden
+--
+-- If the pattern matching parser @sep@ would succeed without consuming any
+-- input then 'sepCap' will force it to fail.
+-- If we allow @sep@ to match a zero-width pattern,
 -- then it can match the same zero-width pattern again at the same position
 -- on the next iteration, which would result in an infinite number of
--- overlapping pattern matches. So, for example, the
--- pattern @many digit@, which can match zero occurences of a digit,
--- will be treated by @sepCap@ as @many1 digit@, and required to match
--- at least one digit.
+-- overlapping pattern matches.
+--
+-- === Notes
 --
 -- This @sepCap@ parser combinator is the basis for all of the other
--- features of this module. It is similar to the @sep*@ family of functions
--- found in
+-- features of this module.
+--
+-- It is similar to the @sep*@ family of functions found in
 -- <http://hackage.haskell.org/package/parser-combinators/docs/Control-Monad-Combinators.html parser-combinators>
 -- and
 -- <http://hackage.haskell.org/package/parsers/docs/Text-Parser-Combinators.html parsers>
 -- but, importantly, it returns the parsed result of the @sep@ parser instead
--- of throwing it away.
---
+-- of throwing it away, like
+-- <http://hackage.haskell.org/package/parser-combinators/docs/Control-Monad-Combinators.html#v:manyTill_ manyTill_>.
 sepCap
     :: Parser a -- ^ The pattern matching parser @sep@
     -> Parser [Either B.ByteString a]

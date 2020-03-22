@@ -7,11 +7,9 @@ module TestText ( tests ) where
 import Distribution.TestSuite as TestSuite
 import Replace.Attoparsec.Text
 import Data.Attoparsec.Text as A
--- import Data.Attoparsec.Text.Char
 import qualified Data.Text as T
 import Text.Parser.Char (upper)
 import Control.Applicative
-import Data.Monoid
 
 tests :: IO [Test]
 tests = return
@@ -51,9 +49,11 @@ tests = return
         (findAll ((A.takeWhile (=='𝅘𝅥𝅯') :: Parser T.Text)))
         ("𝄞𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥𝅯𝅘𝅥𝅯") ("𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥" :: T.Text)
         [Left "𝄞𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥", Right "𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅯", Left "𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥"]
+    , Test $ runParserTest "empty input" (sepCap (fail "" :: Parser ())) "" []
     , Test $ streamEditTest "x to o" (string "x") (const "o") "x x x" "o o o"
     , Test $ streamEditTest "x to o inner" (string "x") (const "o") " x x x " " o o o "
     , Test $ streamEditTest "ordering" (string "456") (const "ABC") "123456789" "123ABC789"
+    , Test $ streamEditTest "empty input" (match (fail "")) (fst) "" ""
     ]
   where
     runParserTest nam p input expected = TestInstance
