@@ -63,7 +63,7 @@ import qualified Data.Attoparsec.Internal.Types as AT
 --
 -- === Output
 --
--- The input stream is separated and output int a list of sections:
+-- The input stream is separated and output into a list of sections:
 --
 -- * Sections which can parsed by the pattern @sep@ will be parsed and captured
 --   as 'Right'
