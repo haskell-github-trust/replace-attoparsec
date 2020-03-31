@@ -105,7 +105,7 @@ Separate the input string into sections which can be parsed as a hexadecimal
 number with a prefix `"0x"`, and sections which can't. Parse the numbers.
 
 ```haskell
-let hexparser = string "0x" >> hexadecimal :: Parser Integer
+let hexparser = string "0x" *> hexadecimal :: Parser Integer
 fromRight [] $ parseOnly (sepCap hexparser) "0xA 000 0xFFFF"
 ```
 ```haskell
@@ -118,7 +118,7 @@ Just get the strings sections which match the hexadecimal parser, throw away
 the parsed number.
 
 ```haskell
-let hexparser = string "0x" >> hexadecimal :: Parser Integer
+let hexparser = string "0x" *> hexadecimal :: Parser Integer
 fromRight [] $ parseOnly (findAll hexparser) "0xA 000 0xFFFF"
 ```
 ```haskell
@@ -131,7 +131,7 @@ Capture the parsed hexadecimal number, as well as the string section which
 parses as a hexadecimal number.
 
 ```haskell
-let hexparser = chunk "0x" >> hexadecimal :: Parser Integer
+let hexparser = chunk "0x" *> hexadecimal :: Parser Integer
 fromRight [] $ parseOnly (findAllCap hexparser) "0xA 000 0xFFFF"
 ```
 ```haskell
@@ -145,13 +145,14 @@ Find groups of balanced nested parentheses. This is an example of a
 expression. We can express the pattern with a recursive parser.
 
 ```haskell
+import Data.Functor
 let parens :: Parser ()
     parens = do
         char '('
         manyTill
             (void (satisfy $ notInClass "()") <|> void parens)
             (char ')')
-        return ()
+        pure ()
 
 fromRight [] $ parseOnly (findAll parens) "(()) (()())"
 ```
@@ -196,7 +197,7 @@ and if *`r≤16`*, then replace *`s`* with a decimal number. Uses the
 combinator.
 
 ```haskell
-let hexparser = string "0x" >> hexadecimal :: Parser Integer
+let hexparser = string "0x" *> hexadecimal :: Parser Integer
 streamEdit (match hexparser) (\(s,r) -> if r <= 16 then T.pack (show r) else s) "0xA 000 0xFFFF"
 ```
 ```haskell
