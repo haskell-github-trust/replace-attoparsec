@@ -1,7 +1,7 @@
 name:                replace-attoparsec
 version:             1.2.1.0
 cabal-version:       1.18
-synopsis:            Find, replace, and edit text patterns with Attoparsec parsers
+synopsis:            Find, replace, and edit text patterns with Attoparsec parsers (instead of regex)
 homepage:            https://github.com/jamesdbrock/replace-attoparsec
 bug-reports:         https://github.com/jamesdbrock/replace-attoparsec/issues
 license:             BSD2
