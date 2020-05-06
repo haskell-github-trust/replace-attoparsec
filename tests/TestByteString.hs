@@ -7,6 +7,7 @@ module TestByteString ( tests ) where
 
 import Distribution.TestSuite as TestSuite
 import Data.Attoparsec.ByteString as A
+import Data.Attoparsec.Combinator
 import qualified Data.ByteString as B
 import Data.ByteString.Internal (c2w)
 import "parsers" Text.Parser.Token
@@ -48,6 +49,14 @@ tests = return
     , Test $ streamEditTest "x to o inner" (string "x") (const "o") " x x x " " o o o "
     , Test $ streamEditTest "ordering" (string "456") (const "ABC") "123456789" "123ABC789"
     , Test $ streamEditTest "empty input" (match (fail "")) (fst) "" ""
+    , Test $ breakCapTest "basic" upperChar "aAa" (Just ("a", c2w 'A', "a"))
+    , Test $ breakCapTest "first" upperChar "Aa" (Just ("", c2w 'A', "a"))
+    , Test $ breakCapTest "last" upperChar "aA" (Just ("a", c2w 'A', ""))
+    , Test $ breakCapTest "fail" upperChar "aaa" Nothing
+    , Test $ breakCapTest "match" (match upperChar) "aAa" (Just ("a", ("A",c2w 'A'), "a"))
+    , Test $ breakCapTest "zero-width" (lookAhead upperChar) "aAa" (Just ("a", c2w 'A', "Aa"))
+    , Test $ breakCapTest "empty input" upperChar "" Nothing
+    , Test $ breakCapTest "empty input zero-width" (return () :: Parser ()) "" (Just ("", (), ""))
     ]
 
   where
@@ -59,7 +68,7 @@ tests = return
                         if (output == expected)
                             then return (Finished Pass)
                             else return (Finished $ TestSuite.Fail
-                                        $ show output ++ " ≠ " ++ show expected)
+                                        $ "got " <> show output <> " expected " <> show expected)
             , name = "parseOnly sepCap " <> nam
             , tags = []
             , options = []
@@ -79,7 +88,7 @@ tests = return
                                 if (output == expected)
                                     then return (Finished Pass)
                                     else return (Finished $ TestSuite.Fail
-                                                $ show output ++ " ≠ " ++ show expected)
+                                                $ "got " <> show output <> " expected " <> show expected)
                         A.Done _i _output -> return (Finished $ TestSuite.Fail $ "Should ask for more input")
                     A.Done _i _output -> return (Finished $ TestSuite.Fail $ "Should ask for more input")
             , name = "parse Partial sepCap " <> nam
@@ -96,6 +105,19 @@ tests = return
                     else return (Finished $ TestSuite.Fail
                                 $ show output ++ " ≠ " ++ show expected)
             , name = "streamEdit " ++ nam
+            , tags = []
+            , options = []
+            , setOption = \_ _ -> Left "no options supported"
+            }
+
+    breakCapTest nam sep input expected = TestInstance
+            { run = do
+                let output = breakCap sep input
+                if (output == expected)
+                    then return (Finished Pass)
+                    else return (Finished $ TestSuite.Fail
+                                $ "got " <> show output <> " expected " <> show expected)
+            , name = "breakCap " ++ nam
             , tags = []
             , options = []
             , setOption = \_ _ -> Left "no options supported"

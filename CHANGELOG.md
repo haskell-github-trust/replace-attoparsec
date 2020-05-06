@@ -1,5 +1,11 @@
 # Revision history for replace-attoparsec
 
+## 1.4.0.0 -- 2020-05-06
+
+__Running Parsers__: Add `splitCap` and `breakCap`.
+
+__Parser Combinators__: Add `anyTill`.
+
 ## 1.2.0.0 -- 2019-10-31
 
 Benchmark improvements
