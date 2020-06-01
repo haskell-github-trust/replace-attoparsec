@@ -100,7 +100,7 @@ import qualified Data.Attoparsec.Internal.Types as AT
 -- If you want to capture the matched string, then combine the pattern
 -- parser @sep@ with 'Data.Attoparsec.ByteString.match'.
 --
--- With the matched string, we can reconstruct in input string.
+-- With the matched string, we can reconstruct the input string.
 -- For all @input@, @sep@, if
 --
 -- @
@@ -149,7 +149,7 @@ breakCap sep input =
 -- If you want to capture the matched strings, then combine the pattern
 -- parser @sep@ with 'Data.Attoparsec.ByteString.match'.
 --
--- With the matched strings, we can reconstruct in input string.
+-- With the matched strings, we can reconstruct the input string.
 -- For all @input@, @sep@, if
 --
 -- @
