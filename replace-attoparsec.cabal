@@ -1,5 +1,5 @@
 name:                replace-attoparsec
-version:             1.4.0.0
+version:             1.4.1.0
 cabal-version:       1.18
 synopsis:            Find, replace, and split string patterns with Attoparsec parsers (instead of regex)
 homepage:            https://github.com/jamesdbrock/replace-attoparsec
