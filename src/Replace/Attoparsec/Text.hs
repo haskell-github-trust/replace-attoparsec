@@ -275,7 +275,7 @@ anyTill sep = do
   where
     go = do
         end <- getOffset
-        r <- optional sep
+        r <- optional $ try sep
         case r of
             Nothing -> atEnd >>= \case
                 True -> empty
@@ -350,7 +350,7 @@ sepCap sep = getOffset >>= go
                 -- the Maybe then the benchmarks get dramatically worse.
                 thisiter <- (<|>)
                     ( do
-                        x <- sep
+                        x <- try sep
                         !offsetAfter <- getOffset
                         -- Don't allow a match of a zero-width pattern
                         when (offsetAfter <= offsetThis) empty

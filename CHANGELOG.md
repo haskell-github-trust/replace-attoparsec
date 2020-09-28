@@ -1,5 +1,11 @@
 # Revision history for replace-attoparsec
 
+## 1.4.2.0 -- 2020-09-28
+
+Bugfix sepCap backtracking when sep fails
+
+See [replace-megaparsec/issues/33](https://github.com/jamesdbrock/replace-megaparsec/issues/33)
+
 ## 1.4.0.0 -- 2020-05-06
 
 __Running Parsers__: Add `splitCap` and `breakCap`.
