@@ -43,7 +43,8 @@ module Replace.Attoparsec.Text
   (
     -- * Running parser
     --
-    -- | Functions in this section are ways to run parsers. They take
+    -- | Functions in this section are /ways to run parsers/
+    -- (like 'Data.Attoparsec.Text.parse'). They take
     -- as arguments a @sep@ parser and some input, run the parser on the input,
     -- and return a result.
     breakCap
@@ -52,7 +53,7 @@ module Replace.Attoparsec.Text
   , streamEditT
     -- * Parser combinator
     --
-    -- | Functions in this section are parser combinators. They take
+    -- | Functions in this section are /parser combinators/. They take
     -- a @sep@ parser for an argument, combine @sep@ with another parser,
     -- and return a new parser.
   , anyTill
@@ -215,7 +216,7 @@ streamEdit sep editor = runIdentity . streamEditT sep (Identity . editor)
 
 
 -- |
--- === Stream editor transformer
+-- === Stream editor
 --
 -- Monad transformer version of 'streamEdit'.
 --
@@ -389,6 +390,7 @@ findAllCap
     -> Parser [Either T.Text (T.Text, a)] -- ^ parser
 findAllCap sep = sepCap (match sep)
 {-# INLINABLE findAllCap #-}
+{-# DEPRECATED findAllCap "replace with `findAllCap sep = sepCap (match sep)`" #-}
 
 -- |
 -- === Find all occurences
@@ -409,6 +411,7 @@ findAll
     -> Parser [Either T.Text T.Text] -- ^ parser
 findAll sep = (fmap.fmap) (second fst) $ sepCap (match sep)
 {-# INLINABLE findAll #-}
+{-# DEPRECATED findAll "replace with `findAll sep = (fmap.fmap) (second fst) $ sepCap (match sep)`" #-}
 
 
 -- Get the 'Data.Attoparsec.Internal.Types.Parser' current offset

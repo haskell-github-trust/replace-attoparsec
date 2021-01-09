@@ -1,5 +1,9 @@
 # Revision history for replace-attoparsec
 
+## 1.4.4.0 -- 2021-01-08
+
+Deprecate `findAll` and `findAllCap`.
+
 ## 1.4.2.0 -- 2020-09-28
 
 Bugfix sepCap backtracking when sep fails

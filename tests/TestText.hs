@@ -11,11 +11,17 @@ import Data.Attoparsec.Combinator
 import qualified Data.Text as T
 import Text.Parser.Char (upper)
 import Control.Applicative
+import Data.Bifunctor
+
+findAllCap' :: Parser a -> Parser [Either T.Text (T.Text, a)]
+findAllCap' sep = sepCap (match sep)
+findAll' :: Parser b -> Parser [Either T.Text T.Text]
+findAll' sep = (fmap.fmap) (second fst) $ sepCap (match sep)
 
 tests :: IO [Test]
 tests = return
-    [ Test $ runParserTest "findAll upperChar"
-        (findAllCap (upper :: Parser Char))
+    [ Test $ runParserTest "findAllCap upperChar"
+        (findAllCap' (upper :: Parser Char))
         ("aBcD" :: T.Text)
         [Left "a", Right ("B", 'B'), Left "c", Right ("D", 'D')]
     -- check that sepCap can progress even when parser consumes nothing
@@ -39,7 +45,7 @@ tests = return
         ([Left "a"])
 #endif
     , Test $ runParserTest "findAll astral"
-        (findAll ((A.takeWhile (=='𝅘𝅥𝅯') :: Parser T.Text)))
+        (findAll' ((A.takeWhile (=='𝅘𝅥𝅯') :: Parser T.Text)))
         ("𝄞𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥" :: T.Text)
         [Left "𝄞𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥", Right "𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅯", Left "𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥"]
     , Test $ runParserFeed "const string"
@@ -47,7 +53,7 @@ tests = return
         (" a") ("a ")
         ([Left " ",Right"aa",Left" "])
     , Test $ runParserFeed "findAll astral"
-        (findAll ((A.takeWhile (=='𝅘𝅥𝅯') :: Parser T.Text)))
+        (findAll' ((A.takeWhile (=='𝅘𝅥𝅯') :: Parser T.Text)))
         ("𝄞𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥𝅯𝅘𝅥𝅯") ("𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥" :: T.Text)
         [Left "𝄞𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥", Right "𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅯𝅘𝅥𝅯", Left "𝅘𝅥𝅘𝅥𝅘𝅥𝅘𝅥"]
     , Test $ runParserTest "empty input" (sepCap (fail "" :: Parser ())) "" []

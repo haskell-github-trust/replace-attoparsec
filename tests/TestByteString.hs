@@ -14,10 +14,13 @@ import "parsers" Text.Parser.Token
 import Replace.Attoparsec.ByteString
 import Control.Applicative
 
+findAllCap' :: Parser a -> Parser [Either B.ByteString (B.ByteString, a)]
+findAllCap' sep = sepCap (match sep)
+
 tests :: IO [Test]
 tests = return
-    [ Test $ runParserTest "findAll upperChar"
-        (findAllCap upperChar)
+    [ Test $ runParserTest "findAllCap upperChar"
+        (findAllCap' upperChar)
         ("aBcD" :: B.ByteString)
         [Left "a", Right ("B", c2w 'B'), Left "c", Right ("D", c2w 'D')]
     -- check that sepCap can progress even when parser consumes nothing

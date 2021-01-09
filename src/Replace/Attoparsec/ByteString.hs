@@ -43,7 +43,8 @@ module Replace.Attoparsec.ByteString
   (
     -- * Running parser
     --
-    -- | Functions in this section are ways to run parsers. They take
+    -- | Functions in this section are /ways to run parsers/
+    -- (like 'Data.Attoparsec.ByteString.parse'). They take
     -- as arguments a @sep@ parser and some input, run the parser on the input,
     -- and return a result.
     breakCap
@@ -52,7 +53,7 @@ module Replace.Attoparsec.ByteString
   , streamEditT
     -- * Parser combinator
     --
-    -- | Functions in this section are parser combinators. They take
+    -- | Functions in this section are /parser combinators/. They take
     -- a @sep@ parser for an argument, combine @sep@ with another parser,
     -- and return a new parser.
   , anyTill
@@ -214,7 +215,7 @@ streamEdit sep editor = runIdentity . streamEditT sep (Identity . editor)
 
 
 -- |
--- === Stream editor transformer
+-- === Stream editor
 --
 -- Monad transformer version of 'streamEdit'.
 --
@@ -244,7 +245,7 @@ streamEditT sep editor input = do
         -- can never fail. If this function ever throws an error, please
         -- report that as a bug.
         -- (We don't use MonadFail because Identity is not a MonadFail.)
-        (Right r) -> fmap mconcat $ traverse (either return editor) r
+        (Right r) ->  mconcat <$> traverse (either return editor) r
 {-# INLINABLE streamEditT #-}
 
 
@@ -351,7 +352,7 @@ sepCap sep = getOffset >>= go
                 -- the Maybe then the benchmarks get dramatically worse.
                 thisiter <- (<|>)
                     ( do
-                        x <- try $ sep
+                        x <- try sep
                         !offsetAfter <- getOffset
                         -- Don't allow a match of a zero-width pattern
                         when (offsetAfter <= offsetThis) empty
@@ -390,6 +391,7 @@ findAllCap
     -> Parser [Either B.ByteString (B.ByteString, a)] -- ^ parser
 findAllCap sep = sepCap (match sep)
 {-# INLINABLE findAllCap #-}
+{-# DEPRECATED findAllCap "replace with `findAllCap sep = sepCap (match sep)`" #-}
 
 
 -- |
@@ -411,6 +413,7 @@ findAll
     -> Parser [Either B.ByteString B.ByteString] -- ^ parser
 findAll sep = (fmap.fmap) (second fst) $ sepCap (match sep)
 {-# INLINABLE findAll #-}
+{-# DEPRECATED findAll "replace with `findAll sep = (fmap.fmap) (second fst) $ sepCap (match sep)`" #-}
 
 
 -- |
