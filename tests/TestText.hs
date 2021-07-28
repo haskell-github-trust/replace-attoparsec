@@ -12,6 +12,7 @@ import qualified Data.Text as T
 import Text.Parser.Char (upper)
 import Control.Applicative
 import Data.Bifunctor
+import qualified TestTextLazy
 
 findAllCap' :: Parser a -> Parser [Either T.Text (T.Text, a)]
 findAllCap' sep = sepCap (match sep)
@@ -19,7 +20,8 @@ findAll' :: Parser b -> Parser [Either T.Text T.Text]
 findAll' sep = (fmap.fmap) (second fst) $ sepCap (match sep)
 
 tests :: IO [Test]
-tests = return
+tests = liftA2 (<>)
+    (pure
     [ Test $ runParserTest "findAllCap upperChar"
         (findAllCap' (upper :: Parser Char))
         ("aBcD" :: T.Text)
@@ -69,7 +71,7 @@ tests = return
     , Test $ breakCapTest "zero-width" (lookAhead upper) "aAa" (Just ("a",'A', "Aa"))
     , Test $ breakCapTest "empty input" upper "" Nothing
     , Test $ breakCapTest "empty input zero-width" (return () :: Parser ()) "" (Just ("", (), ""))
-    ]
+    ]) TestTextLazy.tests
   where
     runParserTest nam p input expected = TestInstance
             { run = do
