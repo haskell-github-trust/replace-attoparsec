@@ -228,7 +228,7 @@ streamEdit sep editor = runIdentity . streamEditT sep (Identity . editor)
 -- If you want the @editor@ function to remember some state,
 -- then run this in a stateful monad.
 streamEditT
-    :: (Monad m)
+    :: Applicative m
     => Parser a
         -- ^ The pattern matching parser @sep@
     -> (a -> m T.Text)
@@ -246,7 +246,7 @@ streamEditT sep editor input = do
         -- can never fail. If this function ever throws an error, please
         -- report that as a bug.
         -- (We don't use MonadFail because Identity is not a MonadFail.)
-        (Right r) -> fmap mconcat $ traverse (either return editor) r
+        (Right r) -> fmap mconcat $ traverse (either pure editor) r
 {-# INLINABLE streamEditT #-}
 
 
