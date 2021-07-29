@@ -74,6 +74,7 @@ import Data.Attoparsec.Text.Lazy as A hiding (parseOnly)
 import qualified Data.Attoparsec.Text as AS
 import Data.List as List ( intercalate )
 import qualified Data.Text.Lazy as T
+import qualified Data.Text.Lazy.Builder as TB
 import qualified Data.Text.Internal.Lazy as TI
 import qualified Data.Text as TS
 import qualified Data.Text.Internal as TIS
@@ -213,12 +214,12 @@ splitCap sep input = do
 -- This is lazy in the input text chunks and should release processed chunks to
 -- the garbage collector promptly.
 --
--- Each edited replacement occurs in its own chunk(s) and input chunks are not
--- merged.
+-- The output is constructed by a 'TB.Builder' and is subject to the chunk size
+-- used there.
 streamEdit
     :: forall a. Parser a
         -- ^ The pattern matching parser @sep@
-    -> (a -> T.Text)
+    -> (a -> TS.Text)
         -- ^ The @editor@ function. Takes a parsed result of @sep@
         -- and returns a new stream section for the replacement.
     -> T.Text
@@ -250,20 +251,20 @@ streamEdit = coerce (streamEditT @Identity @a)
 -- it to be, i.e. if your monad requires running the entire computation before
 -- getting the result then this is effectively strict in the input stream.
 --
--- Each edited replacement occurs in its own chunk(s) and input chunks are not
--- merged.
+-- The output is constructed by a 'TB.Builder' and is subject to the chunk size
+-- used there.
 streamEditT
     :: (Applicative m)
     => Parser a
         -- ^ The pattern matching parser @sep@
-    -> (a -> m T.Text)
+    -> (a -> m TS.Text)
         -- ^ The @editor@ function. Takes a parsed result of @sep@
         -- and returns a new stream section for the replacement.
     -> T.Text
         -- ^ The input stream of text to be edited
     -> m T.Text
         -- ^ The edited input stream
-streamEditT sep editor = go id defP
+streamEditT sep editor = fmap TB.toLazyText . go mempty defP
   where
     -- Our starting parser
     defP = AS.parse (anyTill sep)
@@ -271,19 +272,22 @@ streamEditT sep editor = go id defP
     go failRet p input = case input of
       -- We didn't find anything by the end of the stream, return the accumulated
       -- failure text
-      TI.Empty      -> pure (failRet TI.empty)
+      TI.Empty      -> pure failRet
       TI.Chunk c cs -> case p c of
         -- We didn't find sep or the beginning of sep in this chunk, return the
         -- accumulated failure text as well as this chunk, followed by the
         -- continued edited stream
-        AS.Fail{}      -> failRet . TI.chunk c <$> go id defP cs
+        AS.Fail{}      -> (failRet <>) . (TB.fromText c <>) <$> go mempty defP cs
         -- We found the beginning of sep, add to the failure text in case this
         -- isn't really sep and recurse on the remainder of the stream
-        AS.Partial f   -> go (failRet . TI.chunk c) f cs
+        AS.Partial f   -> go (failRet <> TB.fromText c) f cs
         -- We found sep, return the concatenation of the text until sep, the
         -- edited sep and the edited rest of the stream.
-        AS.Done next r -> T.concat <$> sequenceA
-          [pure (fst r), editor (snd r), go id defP (TI.chunk next cs)]
+        AS.Done next r -> mconcat <$> sequenceA
+          [ pure (TB.fromLazyText (fst r))
+          , TB.fromText <$> editor (snd r)
+          , go mempty defP (TI.chunk next cs)
+          ]
 {-# INLINABLE streamEditT #-}
 
 

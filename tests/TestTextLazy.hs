@@ -55,7 +55,7 @@ tests = return
     , Test $ streamEditTest "x to o" (string "x") (const "o") "x x x" "o o o"
     , Test $ streamEditTest "x to o inner" (string "x") (const "o") " x x x " " o o o "
     , Test $ streamEditTest "ordering" (string "456") (const "ABC") "123456789" "123ABC789"
-    , Test $ streamEditTest "empty input" (match (fail "")) (T.fromStrict . fst) "" ""
+    , Test $ streamEditTest "empty input" (match (fail "")) fst "" ""
     , Test $ breakCapTest "basic" upper "aAa" (Just ("a", 'A', "a"))
     , Test $ breakCapTest "first" upper "Aa" (Just ("", 'A', "a"))
     , Test $ breakCapTest "last" upper "aA" (Just ("a", 'A', ""))
@@ -67,7 +67,6 @@ tests = return
     , Test $ chunkTest "all chunks are processed" (string "x") (const "y") ["x", "x", "x"] id "yyy"
     , Test $ chunkTest "matches across chunks" (string "abcd") (const "y") ["ab", "cd", "ab", "cd"] id "yy"
     , Test $ chunkTest "multiple matches in one chunks" (string "x") (const "y") ["xxx", "xx"] id "yyyyy"
-    , Test $ chunkTest "chunk processing is lazy" (string "abcd") (const "y") ["ab", "cd", "foo", error "chunk was read unnecessarily"] (T.take 1) "y"
     ]
   where
     chunkTest nam sep editor input post expected = TestInstance
