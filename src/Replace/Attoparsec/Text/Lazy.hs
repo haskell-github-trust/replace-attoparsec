@@ -38,6 +38,9 @@
 
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Replace.Attoparsec.Text.Lazy
   (
@@ -68,11 +71,14 @@ import Data.Bifunctor
 import Control.Applicative
 import Control.Monad
 import Data.Attoparsec.Text.Lazy as A hiding (parseOnly)
-import Data.List as List
+import qualified Data.Attoparsec.Text as AS
+import Data.List as List ( intercalate )
 import qualified Data.Text.Lazy as T
+import qualified Data.Text.Internal.Lazy as TI
 import qualified Data.Text as TS
-import qualified Data.Text.Internal as TI
+import qualified Data.Text.Internal as TIS
 import qualified Data.Attoparsec.Internal.Types as AT
+import Data.Coerce
 
 
 -- |
@@ -203,8 +209,14 @@ splitCap sep input = do
 -- @
 -- streamEdit ('Data.Attoparsec.Text.match' sep) 'Data.Tuple.fst' ≡ 'Data.Function.id'
 -- @
+--
+-- This is lazy in the input text chunks and should release processed chunks to
+-- the garbage collector promptly.
+--
+-- Each edited replacement occurs in its own chunk(s) and input chunks are not
+-- merged.
 streamEdit
-    :: Parser a
+    :: forall a. Parser a
         -- ^ The pattern matching parser @sep@
     -> (a -> T.Text)
         -- ^ The @editor@ function. Takes a parsed result of @sep@
@@ -213,7 +225,7 @@ streamEdit
         -- ^ The input stream of text to be edited
     -> T.Text
         -- ^ The edited input stream
-streamEdit sep editor = runIdentity . streamEditT sep (Identity . editor)
+streamEdit = coerce (streamEditT @Identity @a)
 {-# INLINABLE streamEdit #-}
 
 
@@ -229,8 +241,19 @@ streamEdit sep editor = runIdentity . streamEditT sep (Identity . editor)
 --
 -- If you want the @editor@ function to remember some state,
 -- then run this in a stateful monad.
+--
+-- This is lazy in the input text chunks and should release processed chunks to
+-- the garbage collector promptly, i.e. as soon as the presence of a @sep@ has
+-- been ruled out.
+--
+-- Note that this is as only as lazy in the chunks as the selected monad allows
+-- it to be, i.e. if your monad requires running the entire computation before
+-- getting the result then this is effectively strict in the input stream.
+--
+-- Each edited replacement occurs in its own chunk(s) and input chunks are not
+-- merged.
 streamEditT
-    :: (Monad m)
+    :: (Applicative m)
     => Parser a
         -- ^ The pattern matching parser @sep@
     -> (a -> m T.Text)
@@ -240,15 +263,27 @@ streamEditT
         -- ^ The input stream of text to be edited
     -> m T.Text
         -- ^ The edited input stream
-streamEditT sep editor input = do
-    case parseOnly (sepCap sep) input of
-        (Left err) -> error err
-        -- this function should never error, because it only errors
-        -- when the 'sepCap' parser fails, and the 'sepCap' parser
-        -- can never fail. If this function ever throws an error, please
-        -- report that as a bug.
-        -- (We don't use MonadFail because Identity is not a MonadFail.)
-        (Right r) -> fmap mconcat $ traverse (either return editor) r
+streamEditT sep editor = go id defP
+  where
+    -- Our starting parser
+    defP = AS.parse (anyTill sep)
+
+    go failRet p input = case input of
+      -- We didn't find anything by the end of the stream, return the accumulated
+      -- failure text
+      TI.Empty      -> pure (failRet TI.empty)
+      TI.Chunk c cs -> case p c of
+        -- We didn't find sep or the beginning of sep in this chunk, return the
+        -- accumulated failure text as well as this chunk, followed by the
+        -- continued edited stream
+        AS.Fail{}      -> failRet . TI.chunk c <$> go id defP cs
+        -- We found the beginning of sep, add to the failure text in case this
+        -- isn't really sep and recurse on the remainder of the stream
+        AS.Partial f   -> go (failRet . TI.chunk c) f cs
+        -- We found sep, return the concatenation of the text until sep, the
+        -- edited sep and the edited rest of the stream.
+        AS.Done next r -> T.concat <$> sequenceA
+          [pure (fst r), editor (snd r), go id defP (TI.chunk next cs)]
 {-# INLINABLE streamEditT #-}
 
 
@@ -267,6 +302,9 @@ streamEditT sep editor input = do
 -- like 'Data.Attoparsec.Text.takeTill' but is predicated beyond more than
 -- just the next one token. It is also like
 -- 'Data.Attoparsec.Text.takeTill' in that it is a “high performance” parser.
+--
+-- This will also not parse beyond the end of the currently provided input to
+-- the parser unless the beginning of @sep@ has been found.
 anyTill
     :: Parser a -- ^ The pattern matching parser @sep@
     -> Parser (T.Text, a) -- ^ parser
@@ -280,10 +318,16 @@ anyTill sep = do
         end <- getOffset
         r <- optional $ try sep
         case r of
-            Nothing -> atEnd >>= \case
+            Nothing -> atChunkEnd >>= \case
                 True -> empty
                 False -> anyChar >> go
             Just x -> pure (end, x)
+
+-- | Always succeeds, returns 'True' if the parser is at the end of the current
+-- buffer and any additional input would require a 'TI.Partial' result.
+atChunkEnd :: Parser Bool
+atChunkEnd = AT.Parser $ \t pos more _lose succ' ->
+  succ' t pos more (pos + 1 == AT.atBufferEnd (undefined :: TS.Text) t)
 
 
 -- |
@@ -478,8 +522,8 @@ substring !bgn !end = AT.Parser $ \t pos more lose succes ->
     -- http://hackage.haskell.org/package/text-1.2.3.1/docs/Data-Text-Internal.html
     takeCheat :: Int -> Parser TS.Text
     takeCheat len = do
-        (TI.Text arr off _len) <- A.take 0
-        return (TI.Text arr off len)
+        (TIS.Text arr off _len) <- A.take 0
+        return (TIS.Text arr off len)
 
 
 --
