@@ -99,6 +99,8 @@ import Data.Coerce
 -- streamEdit ('Data.Attoparsec.Text.match' sep) 'Data.Tuple.fst' ≡ 'Data.Function.id'
 -- @
 --
+-- ==== Laziness
+--
 -- This is lazy in the input text chunks and should release processed chunks to
 -- the garbage collector promptly.
 --
@@ -130,6 +132,8 @@ streamEdit = coerce (streamEditT @Identity @a)
 --
 -- If you want the @editor@ function to remember some state,
 -- then run this in a stateful monad.
+--
+-- ==== Laziness
 --
 -- This is lazy in the input text chunks and should release processed chunks to
 -- the garbage collector promptly, i.e. as soon as the presence of a @sep@ has
@@ -195,8 +199,14 @@ streamEditT sep editor = fmap TB.toLazyText . go mempty defP
 -- just the next one token. It is also like
 -- 'Data.Attoparsec.Text.takeTill' in that it is a “high performance” parser.
 --
--- This will also not parse beyond the end of the currently provided input to
--- the parser unless the beginning of @sep@ has been found.
+-- ==== Laziness
+--
+-- When the 'anyTill' parser reaches the end of the current input chunk
+-- before finding the beginning of @sep@ then the parser will fail.
+--
+-- When the 'anyTill' parser reaches the end of the current input chunk
+-- while it is successfully parsing @sep@ then it will lazily fetch more
+-- input and continue parsing.
 anyTill
     :: Parser a -- ^ The pattern matching parser @sep@
     -> Parser (T.Text, a) -- ^ parser
