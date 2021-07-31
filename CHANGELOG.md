@@ -1,5 +1,9 @@
 # Revision history for replace-attoparsec
 
+## 1.4.5.0 -- 2021-07-29
+
+Add Replace.Attoparsec.Text.Lazy
+
 ## 1.4.4.0 -- 2021-01-08
 
 Deprecate `findAll` and `findAllCap`.
