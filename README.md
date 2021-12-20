@@ -95,6 +95,7 @@ The examples depend on these imports and `LANGUAGE OverloadedStrings`.
 import Replace.Attoparsec.Text
 import Data.Attoparsec.Text as AT
 import qualified Data.Text as T
+import Control.Applicative
 import Data.Either
 import Data.Char
 ```
@@ -127,7 +128,7 @@ let parens :: Parser ()
     parens = do
         char '('
         manyTill
-            (void (satisfy $ notInClass "()") <|> void parens)
+            (void parens <|> void anyChar)
             (char ')')
         pure ()
 
