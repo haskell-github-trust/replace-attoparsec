@@ -308,14 +308,14 @@ string `oo`. So, like the regex `s/x/oo/g`.
 
 We have two benchmark input cases, which we call __dense__ and __sparse__.
 
-The __dense__ case is one megabyte of alternating spaces and `x`s
+The __dense__ case is ten megabytes of alternating spaces and `x`s
 like
 
 ```
 x x x x x x x x x x x x x x x x x x x x x x x x x x x x
 ```
 
-The __sparse__ case is one megabyte of spaces with a single `x` in the middle
+The __sparse__ case is ten megabytes of spaces with a single `x` in the middle
 like
 
 ```
