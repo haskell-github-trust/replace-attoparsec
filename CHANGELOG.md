@@ -1,5 +1,15 @@
 # Revision history for replace-attoparsec
 
+## 1.5.0.0 -- 2023-05-30
+
+Upgrade to GHC v9.4.4, text v2.0.1
+
+Text does not work with GHC v9.4.3
+
+Test
+* exitcode-stdio-1.0 instead of detailed-0.9
+* HSpec instead of Cabal Distribution.TestSuite
+
 ## 1.4.5.0 -- 2021-07-29
 
 Add Replace.Attoparsec.Text.Lazy
